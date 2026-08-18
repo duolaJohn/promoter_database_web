@@ -71,6 +71,19 @@ describe('release JBrowse configuration', () => {
     expect(config.tracks.every((track) => track.metadata.seqEdgeDownload.downloadMode === 'browser')).toBe(true);
   });
 
+  it('keeps a reference-only browser when optional feature tracks are unavailable', () => {
+    const referenceOnly = { ...assembly(false), adapterMode: 'unindexed' as const };
+    referenceOnly.assets.predictedPromoters = '';
+    render(<PortalJBrowseViewer assembly={referenceOnly} />);
+    const config = vi.mocked(createViewState).mock.calls[0][0] as unknown as {
+      tracks: ReadonlyArray<unknown>;
+      defaultSession: { view: { tracks: ReadonlyArray<unknown> } };
+    };
+
+    expect(config.tracks).toHaveLength(0);
+    expect(config.defaultSession.view.tracks).toHaveLength(1);
+  });
+
   it('wires view changes to the region download controller', () => {
     const onRegionChange = vi.fn();
     render(<PortalJBrowseViewer assembly={assembly(false)} onRegionChange={onRegionChange} />);

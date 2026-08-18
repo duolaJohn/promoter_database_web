@@ -19,6 +19,7 @@ const genomes = Array.from({ length: 30 }, (_, index) => makeGenome({
   genus: index % 2 === 0 ? 'Bacillus' : 'Pseudomonas',
   genomeSource: index % 3 === 0 ? 'isolate' : 'MAG',
   genomeSizeBp: 1_000_000 + index,
+  contigCount: index === 0 ? 1 : 2,
   predictedPromoterCount: index * 100,
   annotationStatus: index % 5 === 0 ? 'available' : 'missing',
 }));
@@ -46,7 +47,8 @@ describe('portal genome explorer', () => {
     const user = userEvent.setup();
     render(<PortalGenomeExplorer initialResult={response()} />);
 
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByText('Showing 1-25')).toBeInTheDocument();
+    expect(screen.getByText('1 contig')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     await user.type(screen.getByPlaceholderText(/Search accession/), 'Annotated');
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -61,12 +63,12 @@ describe('portal genome explorer', () => {
     render(<PortalGenomeExplorer initialResult={response()} />);
 
     await user.click(screen.getByRole('button', { name: 'Next page' }));
-    await waitFor(() => expect(screen.getByText('Page 2 of 2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Showing 26-30')).toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'GCA_000411665.1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Previous page' }));
-    await waitFor(() => expect(screen.getByText('Page 1 of 2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Showing 1-25')).toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'GCA_000411415.1' })).toBeInTheDocument();
   });
 
@@ -76,11 +78,12 @@ describe('portal genome explorer', () => {
     render(<PortalGenomeExplorer initialResult={response()} />);
 
     await user.click(screen.getByRole('button', { name: 'Next page' }));
-    await waitFor(() => expect(screen.getByText('Page 2 of 2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Showing 26-30')).toBeInTheDocument());
 
     await user.selectOptions(screen.getByLabelText('Rows'), '50');
-    expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
     await waitFor(() => expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('limit=50'));
+    await waitFor(() => expect(screen.getByText('Showing 1-25')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
     expect(fetchMock.mock.calls.at(-1)?.[0]).not.toContain('cursor=');
   });
 

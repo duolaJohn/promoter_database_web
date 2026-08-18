@@ -154,6 +154,8 @@ describe('genome detail release contract', () => {
     expect(screen.getByText('Taxonomy').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('1,600 / Mb')).toBeInTheDocument();
     expect(screen.getByText('RAPPtor 1.0')).toBeInTheDocument();
+    expect(screen.queryByText('Portal status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Publication status')).not.toBeInTheDocument();
     expect(container.querySelector('.genome-metrics-grid small')).not.toBeInTheDocument();
     expect(screen.queryByText('Coding density')).not.toBeInTheDocument();
     expect(screen.queryByText('Score rule')).not.toBeInTheDocument();
@@ -186,6 +188,17 @@ describe('genome detail release contract', () => {
     expect(screen.queryByText('Not reported')).not.toBeInTheDocument();
   });
 
+  it('does not repeat a model name already included in its version', async () => {
+    const richMatch = match('GCA_000411415.1', 'available');
+    richMatch.details = details();
+    richMatch.details.promoter.sourceVersion = 'RAPPtor V1';
+    vi.mocked(genomeCatalogRepository.getByAccession).mockResolvedValue(richMatch);
+    render(await GenomeDetailPage({ params: Promise.resolve({ accession: richMatch.genome.accession }) }));
+
+    expect(screen.getByText('RAPPtor V1')).toBeInTheDocument();
+    expect(screen.queryByText('RAPPtor RAPPtor V1')).not.toBeInTheDocument();
+  });
+
   it('omits the NCBI track for GCA_000421325.1', async () => {
     vi.mocked(genomeCatalogRepository.getByAccession).mockResolvedValue(match('GCA_000421325.1', 'missing'));
     render(await GenomeDetailPage({ params: Promise.resolve({ accession: 'GCA_000421325.1' }) }));
@@ -200,10 +213,21 @@ describe('genome detail release contract', () => {
     render(await GenomeDetailPage({ params: Promise.resolve({ accession: 'GCA_000431335.1' }) }));
 
     expect(screen.getByTestId('browser-contract')).toHaveAttribute('data-ncbi', 'false');
-    expect(screen.getAllByText('incompatible')).not.toHaveLength(0);
+    expect(screen.queryByText('incompatible')).not.toBeInTheDocument();
     expect(screen.queryByText('Incompatible with assembly')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /NCBI annotation/ })).not.toBeInTheDocument();
     expect(screen.getAllByRole('link').filter((link) => link.hasAttribute('download'))).toHaveLength(0);
+  });
+
+  it('hides annotation provenance when annotation is legitimately unavailable', async () => {
+    const missing = match('GCA_000421325.1', 'missing');
+    missing.details = details();
+    vi.mocked(genomeCatalogRepository.getByAccession).mockResolvedValue(missing);
+    render(await GenomeDetailPage({ params: Promise.resolve({ accession: missing.genome.accession }) }));
+
+    expect(screen.queryByText('Annotation source')).not.toBeInTheDocument();
+    expect(screen.queryByText('Annotation version')).not.toBeInTheDocument();
+    expect(screen.queryByText('Annotation generated at')).not.toBeInTheDocument();
   });
 
   it('shows catalog metadata while staged genome files are being prepared', async () => {

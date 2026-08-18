@@ -282,6 +282,7 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .portal-footer strong { font-size: 16px; }.portal-footer p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
 .portal-footer nav { display: flex; gap: 24px; color: var(--ink-soft); font-size: 13px; font-weight: 650; }
 .portal-footer a:hover { color: var(--teal-dark); }
+.portal-footer .footer-link-disabled { color: var(--muted); cursor: default; }
 
 @media (max-width: 1000px) {
   .portal-hero-layout { grid-template-columns: 1fr; gap: 48px; }

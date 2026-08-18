@@ -13,6 +13,16 @@ function formatNumber(value: number | null, suffix = '') {
   return value === null ? 'Not reported' : `${value.toLocaleString()}${suffix}`;
 }
 
+function formatPredictionModel(sourceId: string | null | undefined, sourceVersion: string | null | undefined) {
+  const source = sourceId?.trim() || '';
+  const version = sourceVersion?.trim() || '';
+  if (!source) return version;
+  if (!version) return source;
+  return version.toLocaleLowerCase().startsWith(source.toLocaleLowerCase())
+    ? version
+    : `${source} ${version}`;
+}
+
 type MetadataFact = {
   label: string;
   value: ReactNode;
@@ -86,7 +96,8 @@ export default async function GenomeDetailPage({ params }: { params: Promise<{ a
   const promoterDensityPerMb = genome.genomeSizeBp && genome.genomeSizeBp > 0
     ? genome.predictedPromoterCount * 1_000_000 / genome.genomeSizeBp
     : null;
-  const predictionModel = [details?.promoter.sourceId, details?.promoter.sourceVersion].filter(Boolean).join(' ');
+  const predictionModel = formatPredictionModel(details?.promoter.sourceId, details?.promoter.sourceVersion);
+  const annotationAvailable = genome.annotationStatus === 'available';
 
   return (
     <main className="portal-page genome-detail-page">
@@ -155,21 +166,17 @@ export default async function GenomeDetailPage({ params }: { params: Promise<{ a
               { label: 'Protein count', value: formatNumber(details?.proteinCount ?? null) },
               { label: 'tRNA count', value: formatNumber(details?.trnaCount ?? null) },
               { label: 'MIMAG quality', value: details?.mimagQuality },
-              { label: 'Portal status', value: genome.annotationStatus },
-              { label: 'Feature count', value: genome.annotationFeatureCount },
-              { label: 'Experimental TSS count', value: genome.experimentalTssCount },
+              { label: 'NCBI feature count', value: annotationAvailable && genome.annotationFeatureCount > 0 ? genome.annotationFeatureCount : null },
             ]} />
 
-            <MetadataGroup title="Annotation and release" facts={[
+            <MetadataGroup title="Prediction and release" facts={[
               { label: 'Prediction model', value: predictionModel || null },
               { label: 'Prediction generated at', value: details?.promoter.generatedAt },
-              { label: 'Annotation source', value: details?.annotation.sourceId },
-              { label: 'Annotation version', value: details?.annotation.sourceVersion },
-              { label: 'Annotation generated at', value: details?.annotation.generatedAt },
-              { label: 'SeqEdge release', value: releaseId, mono: true },
+              { label: 'Annotation source', value: annotationAvailable ? details?.annotation.sourceId : null },
+              { label: 'Annotation version', value: annotationAvailable ? details?.annotation.sourceVersion : null },
+              { label: 'Annotation generated at', value: annotationAvailable ? details?.annotation.generatedAt : null },
               { label: 'GTDB taxonomy release', value: details?.release.sourceReleaseId, mono: true },
               { label: 'Release date', value: details?.release.releaseDate },
-              { label: 'Publication status', value: details?.release.publicationStatus },
               {
                 label: 'Dataset repository',
                 value: details?.release.hfRepository

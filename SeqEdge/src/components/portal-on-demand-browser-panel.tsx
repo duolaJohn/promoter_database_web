@@ -69,24 +69,35 @@ export default function PortalOnDemandBrowserPanel({ accession, releaseId, plann
       };
       const [compressedReference, promoters, annotation] = await Promise.all([
         load('reference', plannedAssets.reference, assetCacheKey(cachePrefix, 'reference', plannedAssets.reference, plannedAssets.cacheVersions.reference)),
-        load('promoters', plannedAssets.predictedPromoters, assetCacheKey(cachePrefix, 'promoters', plannedAssets.predictedPromoters, plannedAssets.cacheVersions.predictedPromoters)),
+        load('promoters', plannedAssets.predictedPromoters, assetCacheKey(cachePrefix, 'promoters', plannedAssets.predictedPromoters, plannedAssets.cacheVersions.predictedPromoters)).catch(() => null),
         plannedAssets.ncbiAnnotations
           ? load('annotation', plannedAssets.ncbiAnnotations, assetCacheKey(cachePrefix, 'ncbi', plannedAssets.ncbiAnnotations, plannedAssets.cacheVersions.ncbiAnnotations)).catch(() => null)
           : Promise.resolve(null),
       ]);
+      const decompress = async (kind: keyof FileStates, blob: Blob | null, required = false) => {
+        if (!blob) return null;
+        try {
+          return await maybeDecompressGzip(blob);
+        } catch (cause) {
+          if (!controller.signal.aborted) setFileStates((current) => ({ ...current, [kind]: 'failed' }));
+          if (required) throw cause;
+          return null;
+        }
+      };
       const [reference, promoterGff, annotationGff] = await Promise.all([
-        maybeDecompressGzip(compressedReference),
-        maybeDecompressGzip(promoters),
-        annotation ? maybeDecompressGzip(annotation) : Promise.resolve(null),
+        decompress('reference', compressedReference, true),
+        decompress('promoters', promoters),
+        decompress('annotation', annotation),
       ]);
+      if (!reference) throw new Error('The reference assembly could not be prepared.');
       const header = await reference.slice(0, 256 * 1024).text();
       const refName = firstFastaRefName(header);
       if (!refName) throw new Error('The reference assembly does not contain a FASTA sequence header.');
 
       const fastaUrl = objectUrl(reference, 'text/plain');
-      const promoterUrl = objectUrl(promoterGff, 'text/plain');
+      const promoterUrl = promoterGff ? objectUrl(promoterGff, 'text/plain') : '';
       const annotationUrl = annotationGff ? objectUrl(annotationGff, 'text/plain') : null;
-      objectUrls.current = [fastaUrl, promoterUrl, ...(annotationUrl ? [annotationUrl] : [])];
+      objectUrls.current = [fastaUrl, ...(promoterUrl ? [promoterUrl] : []), ...(annotationUrl ? [annotationUrl] : [])];
       setAssembly({
         assemblyName: accession,
         defaultLocus: `${refName}:1-10000`,

@@ -53,6 +53,11 @@ function formatCount(value: number | null) {
   return value === null ? 'Not reported' : new Intl.NumberFormat('en-US').format(value);
 }
 
+function formatContigs(value: number | null) {
+  if (value === null) return 'Not reported';
+  return `${formatCount(value)} ${value === 1 ? 'contig' : 'contigs'}`;
+}
+
 function buildRequestUrl(query: GenomeSearchQuery) {
   const params = new URLSearchParams();
   if (query.q) params.set('q', query.q);
@@ -210,7 +215,6 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
   };
 
   const pageNumber = cursorHistory.length + 1;
-  const pageCount = Math.max(1, Math.ceil(result.total / pageSize));
   const start = result.total ? (pageNumber - 1) * pageSize + 1 : 0;
   const end = result.total ? start + result.items.length - 1 : 0;
 
@@ -282,7 +286,7 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
                 <td><Link href={`/genomes/${encodeURIComponent(genome.accession)}`} className="catalog-accession">{genome.accession}</Link></td>
                 <td><span className="organism-name">{genome.organismName}</span>{genome.strain && <small>{genome.strain}</small>}</td>
                 <td><span>{genome.phylum || 'Unclassified'}</span><small>{genome.genus || 'Genus not assigned'}</small></td>
-                <td><span>{formatCount(genome.genomeSizeBp)} bp</span><small>{formatCount(genome.contigCount)} contigs</small></td>
+                <td><span>{formatCount(genome.genomeSizeBp)} bp</span><small>{formatContigs(genome.contigCount)}</small></td>
                 <td className="numeric-cell">{genome.predictedPromoterCount.toLocaleString()}</td>
                 <td>{genome.annotationStatus === 'available'
                   ? <span className="evidence-available">NCBI cataloged</span>
@@ -296,7 +300,6 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
 
       <div className="catalog-pagination">
         <label>Rows <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value) as GenomeSearchQuery['limit'])}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
-        <span>Page {pageNumber.toLocaleString()} of {pageCount.toLocaleString()}</span>
         <div>
           <button type="button" onClick={goToPreviousPage} disabled={isLoading || cursorHistory.length === 0} title="Previous page" aria-label="Previous page"><ChevronLeftRoundedIcon /></button>
           <button type="button" onClick={goToNextPage} disabled={isLoading || !result.pageInfo.hasNext} title="Next page" aria-label="Next page"><ChevronRightRoundedIcon /></button>

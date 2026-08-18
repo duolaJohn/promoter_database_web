@@ -441,6 +441,36 @@ describe('D1 genome catalog repository', () => {
     });
   });
 
+  it('uses indexed assets only when all required paths exist, independently of promoter status', async () => {
+    const database = new FakeD1();
+    database.rows[0].promoter_status = 'staged';
+    const repository = new D1GenomeCatalogRepository(database);
+
+    await expect(repository.getByAccession('GCA_000000001.1')).resolves.toMatchObject({
+      resourceStatus: 'ready',
+      assetBase: '/api/remote-data',
+    });
+
+    database.rows[0].promoter_status = 'ready';
+    database.rows[0].promoter_index_path = null;
+    const incompleteRepository = new D1GenomeCatalogRepository(database);
+    await expect(incompleteRepository.getByAccession('GCA_000000001.1')).resolves.toMatchObject({
+      resourceStatus: 'staged',
+      assetBase: null,
+    });
+  });
+
+  it('omits an incomplete optional annotation track without blocking indexed browsing', async () => {
+    const database = new FakeD1();
+    database.rows[0].annotation_index_path = null;
+    const repository = new D1GenomeCatalogRepository(database);
+
+    const match = await repository.getByAccession('GCA_000000001.1');
+    expect(match).toMatchObject({ resourceStatus: 'ready' });
+    expect(match?.genome.assets.ncbiAnnotations).toBeNull();
+    expect(match?.genome.assets.ncbiAnnotationsIndex).toBeNull();
+  });
+
   it('bounds expanded taxonomy paths before building the D1 page query', async () => {
     const database = new FakeD1();
     const repository = new D1GenomeCatalogRepository(database);
