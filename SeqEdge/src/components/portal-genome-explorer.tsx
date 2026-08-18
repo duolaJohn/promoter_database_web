@@ -279,6 +279,7 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
             <th className="catalog-sortable-heading" aria-sort={sortField === 'genome-size' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}>{sortHeader('genome-size', 'Assembly size')}</th>
             <th className="catalog-sortable-heading" aria-sort={sortField === 'promoters' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}>{sortHeader('promoters', 'Predicted promoters')}</th>
             <th>Annotation</th>
+            <th>Experimental evidence</th>
           </tr></thead>
           <tbody>
             {result.items.map((genome) => (
@@ -291,9 +292,12 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
                 <td>{genome.annotationStatus === 'available'
                   ? <span className="evidence-available">NCBI cataloged</span>
                   : <span className="evidence-muted">Not cataloged</span>}</td>
+                <td>{genome.hasExperimentalEvidence
+                  ? <span className="evidence-available">Available</span>
+                  : <span className="evidence-muted">Not available</span>}</td>
               </tr>
             ))}
-            {result.items.length === 0 && <tr><td colSpan={6} className="catalog-empty">No genomes match the current filters.</td></tr>}
+            {result.items.length === 0 && <tr><td colSpan={7} className="catalog-empty">No genomes match the current filters.</td></tr>}
           </tbody>
         </table>
       </div>

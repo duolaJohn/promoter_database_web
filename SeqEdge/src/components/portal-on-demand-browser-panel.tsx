@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
-import GenomeFileStatus, { type GenomeFileState } from '@/components/genome-file-status';
 import PortalBrowserPanel from '@/components/portal-browser-panel';
 import { firstFastaRefName, loadCachedGenomeAsset, maybeDecompressGzip } from '@/lib/on-demand-genome-assets';
 import type { PlannedGenomeAssets } from '@/lib/hf-batch-assets';
@@ -13,16 +12,6 @@ type Props = {
   releaseId: string;
   plannedAssets: PlannedGenomeAssets;
 };
-
-type FileStates = { reference: GenomeFileState; promoters: GenomeFileState; annotation: GenomeFileState };
-
-function initialFileStates(hasAnnotation: boolean): FileStates {
-  return {
-    reference: 'preparing',
-    promoters: 'preparing',
-    annotation: hasAnnotation ? 'preparing' : 'unavailable',
-  };
-}
 
 function objectUrl(blob: Blob, type: string) {
   return URL.createObjectURL(new Blob([blob], { type }));
@@ -36,7 +25,6 @@ export default function PortalOnDemandBrowserPanel({ accession, releaseId, plann
   const [assembly, setAssembly] = useState<JBrowseReleaseAssembly | null>(null);
   const [status, setStatus] = useState<'loading' | 'error'>('loading');
   const [error, setError] = useState('');
-  const [fileStates, setFileStates] = useState<FileStates>(() => initialFileStates(Boolean(plannedAssets.ncbiAnnotations)));
   const objectUrls = useRef<string[]>([]);
   const abortController = useRef<AbortController | null>(null);
 
@@ -54,40 +42,29 @@ export default function PortalOnDemandBrowserPanel({ accession, releaseId, plann
     setAssembly(null);
     setStatus('loading');
     setError('');
-    setFileStates(initialFileStates(Boolean(plannedAssets.ncbiAnnotations)));
     try {
       const cachePrefix = `${releaseId}/${accession}`;
-      const load = async (kind: keyof FileStates, url: string, cacheKey: string) => {
-        try {
-          const blob = await loadCachedGenomeAsset(url, cacheKey, controller.signal);
-          if (!controller.signal.aborted) setFileStates((current) => ({ ...current, [kind]: 'available' }));
-          return blob;
-        } catch (cause) {
-          if (!controller.signal.aborted) setFileStates((current) => ({ ...current, [kind]: 'failed' }));
-          throw cause;
-        }
-      };
+      const load = (url: string, cacheKey: string) => loadCachedGenomeAsset(url, cacheKey, controller.signal);
       const [compressedReference, promoters, annotation] = await Promise.all([
-        load('reference', plannedAssets.reference, assetCacheKey(cachePrefix, 'reference', plannedAssets.reference, plannedAssets.cacheVersions.reference)),
-        load('promoters', plannedAssets.predictedPromoters, assetCacheKey(cachePrefix, 'promoters', plannedAssets.predictedPromoters, plannedAssets.cacheVersions.predictedPromoters)).catch(() => null),
+        load(plannedAssets.reference, assetCacheKey(cachePrefix, 'reference', plannedAssets.reference, plannedAssets.cacheVersions.reference)),
+        load(plannedAssets.predictedPromoters, assetCacheKey(cachePrefix, 'promoters', plannedAssets.predictedPromoters, plannedAssets.cacheVersions.predictedPromoters)).catch(() => null),
         plannedAssets.ncbiAnnotations
-          ? load('annotation', plannedAssets.ncbiAnnotations, assetCacheKey(cachePrefix, 'ncbi', plannedAssets.ncbiAnnotations, plannedAssets.cacheVersions.ncbiAnnotations)).catch(() => null)
+          ? load(plannedAssets.ncbiAnnotations, assetCacheKey(cachePrefix, 'ncbi', plannedAssets.ncbiAnnotations, plannedAssets.cacheVersions.ncbiAnnotations)).catch(() => null)
           : Promise.resolve(null),
       ]);
-      const decompress = async (kind: keyof FileStates, blob: Blob | null, required = false) => {
+      const decompress = async (blob: Blob | null, required = false) => {
         if (!blob) return null;
         try {
           return await maybeDecompressGzip(blob);
         } catch (cause) {
-          if (!controller.signal.aborted) setFileStates((current) => ({ ...current, [kind]: 'failed' }));
           if (required) throw cause;
           return null;
         }
       };
       const [reference, promoterGff, annotationGff] = await Promise.all([
-        decompress('reference', compressedReference, true),
-        decompress('promoters', promoters),
-        decompress('annotation', annotation),
+        decompress(compressedReference, true),
+        decompress(promoters),
+        decompress(annotation),
       ]);
       if (!reference) throw new Error('The reference assembly could not be prepared.');
       const header = await reference.slice(0, 256 * 1024).text();
@@ -125,17 +102,14 @@ export default function PortalOnDemandBrowserPanel({ accession, releaseId, plann
     void prepare();
   }, [prepare]);
 
-  if (assembly) return <><GenomeFileStatus states={fileStates} /><PortalBrowserPanel assembly={assembly} /></>;
+  if (assembly) return <PortalBrowserPanel assembly={assembly} />;
 
   return (
-    <>
-      <GenomeFileStatus states={fileStates} />
-      <div className="browser-unavailable browser-on-demand">
-        <strong>{status === 'loading' ? 'Preparing genome browser' : 'Genome browser could not be loaded'}</strong>
-        {status === 'loading'
-          ? <p>Loading this genome from the local browser cache or release storage.</p>
-          : <><p className="browser-load-error" role="alert">{error}</p><button type="button" className="browser-load-button" onClick={() => void prepare()}><PlayArrowRoundedIcon aria-hidden="true" />Retry</button></>}
-      </div>
-    </>
+    <div className="browser-unavailable browser-on-demand">
+      <strong>{status === 'loading' ? 'Preparing genome browser' : 'Genome browser could not be loaded'}</strong>
+      {status === 'loading'
+        ? <p>Loading this genome from the local browser cache or release storage.</p>
+        : <><p className="browser-load-error" role="alert">{error}</p><button type="button" className="browser-load-button" onClick={() => void prepare()}><PlayArrowRoundedIcon aria-hidden="true" />Retry</button></>}
+    </div>
   );
 }

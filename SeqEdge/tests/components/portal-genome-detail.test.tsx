@@ -132,7 +132,7 @@ describe('genome detail release contract', () => {
 
     expect(screen.getByTestId('browser-contract')).toHaveAttribute('data-assembly', 'GCA_000411415.1');
     expect(screen.getByTestId('browser-contract')).toHaveAttribute('data-ncbi', 'true');
-    expect(screen.getByLabelText('Genome files')).toHaveTextContent('ReferenceAvailablePromotersAvailableAnnotationAvailable');
+    expect(screen.queryByLabelText('Genome files')).not.toBeInTheDocument();
     expect(screen.queryByText('Release assets')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Downloads' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('link').filter((link) => link.hasAttribute('download'))).toHaveLength(0);

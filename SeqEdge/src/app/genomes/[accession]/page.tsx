@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
-import GenomeFileStatus from '@/components/genome-file-status';
 import PortalBrowserPanel from '@/components/portal-browser-panel';
 import PortalOnDemandBrowserPanel from '@/components/portal-on-demand-browser-panel';
 import { genomeCatalogRepository } from '@/lib/genome-catalog-repository';
@@ -112,10 +111,10 @@ export default async function GenomeDetailPage({ params }: { params: Promise<{ a
               </div>
             </header>
             {browserAssembly
-              ? <><GenomeFileStatus states={{ reference: 'available', promoters: 'available', annotation: browserAssets.ncbiAnnotations ? 'available' : 'unavailable' }} /><PortalBrowserPanel assembly={browserAssembly} /></>
+              ? <PortalBrowserPanel assembly={browserAssembly} />
               : match.plannedAssets
                 ? <PortalOnDemandBrowserPanel accession={genome.accession} releaseId={releaseId} plannedAssets={match.plannedAssets} />
-                : <><GenomeFileStatus states={{ reference: 'preparing', promoters: 'preparing', annotation: genome.annotationStatus === 'available' ? 'preparing' : 'unavailable' }} /><div className="browser-unavailable"><strong>Genome files are being prepared</strong><p>The catalog metadata and feature counts are available. Reference and indexed track files will appear here after upload validation.</p></div></>}
+                : <div className="browser-unavailable"><strong>Genome files are being prepared</strong><p>The catalog metadata and feature counts are available. Reference and indexed track files will appear here after upload validation.</p></div>}
           </section>
         </div>
 

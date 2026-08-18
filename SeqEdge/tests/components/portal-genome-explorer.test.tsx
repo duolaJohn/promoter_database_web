@@ -22,6 +22,7 @@ const genomes = Array.from({ length: 30 }, (_, index) => makeGenome({
   contigCount: index === 0 ? 1 : 2,
   predictedPromoterCount: index * 100,
   annotationStatus: index % 5 === 0 ? 'available' : 'missing',
+  hasExperimentalTss: index === 0,
 }));
 
 function response(items = genomes.slice(0, 25), total = genomes.length): GenomeSearchResponse {
@@ -49,6 +50,8 @@ describe('portal genome explorer', () => {
 
     expect(screen.getByText('Showing 1-25')).toBeInTheDocument();
     expect(screen.getByText('1 contig')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Experimental evidence' })).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     await user.type(screen.getByPlaceholderText(/Search accession/), 'Annotated');
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());

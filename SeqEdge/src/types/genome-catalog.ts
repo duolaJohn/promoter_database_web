@@ -24,6 +24,7 @@ export interface GenomeCatalogRow {
   contigCount: number | null;
   predictedPromoterCount: number;
   annotationStatus: ReleaseGenome['annotationStatus'];
+  hasExperimentalEvidence: boolean;
 }
 
 export interface GenomeSearchQuery {
