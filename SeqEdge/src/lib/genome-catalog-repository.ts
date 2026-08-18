@@ -89,6 +89,7 @@ function toCatalogRow(genome: ReleaseGenome): GenomeCatalogRow {
     contigCount: genome.contigCount,
     predictedPromoterCount: genome.predictedPromoterCount,
     annotationStatus: genome.annotationStatus,
+    hasExperimentalEvidence: genome.hasExperimentalTss,
   };
 }
 
@@ -509,6 +510,7 @@ function d1RowToCatalogRow(row: D1GenomeRow): GenomeCatalogRow {
     contigCount: row.contig_count as number | null,
     predictedPromoterCount: Number(row.predicted_promoter_count || 0),
     annotationStatus: d1AnnotationStatus(row.annotation_status),
+    hasExperimentalEvidence: false,
   };
 }
 

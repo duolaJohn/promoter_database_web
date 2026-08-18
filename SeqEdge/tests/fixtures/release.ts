@@ -79,6 +79,7 @@ export function makeCatalogRow(genome: ReleaseGenome): GenomeCatalogRow {
     contigCount: genome.contigCount,
     predictedPromoterCount: genome.predictedPromoterCount,
     annotationStatus: genome.annotationStatus,
+    hasExperimentalEvidence: genome.hasExperimentalTss,
   };
 }
 

@@ -67,7 +67,7 @@ describe('on-demand genome browser', () => {
 
     expect(await screen.findByTestId('prepared-browser')).toHaveAttribute('data-locus', 'NC_000001.1:1-10000');
     expect(screen.getByTestId('prepared-browser')).toHaveAttribute('data-ncbi', 'true');
-    expect(screen.getByLabelText('Genome files')).toHaveTextContent('ReferenceAvailablePromotersAvailableAnnotationAvailable');
+    expect(screen.queryByLabelText('Genome files')).not.toBeInTheDocument();
     expect(loadCachedGenomeAsset).toHaveBeenCalledTimes(3);
     expect(vi.mocked(loadCachedGenomeAsset).mock.calls.map(([url, key]) => [url, key])).toEqual([
       [plannedAssets.reference, `SeqEdge 2026-08-13/GCA_000007325.1/reference/${'a'.repeat(64)}`],
@@ -97,7 +97,7 @@ describe('on-demand genome browser', () => {
     );
 
     expect(await screen.findByTestId('prepared-browser')).toHaveAttribute('data-ncbi', 'false');
-    expect(screen.getByLabelText('Genome files')).toHaveTextContent('ReferenceAvailablePromotersAvailableAnnotationNot available');
+    expect(screen.queryByLabelText('Genome files')).not.toBeInTheDocument();
     expect(loadCachedGenomeAsset).toHaveBeenCalledTimes(2);
   });
 
@@ -120,7 +120,7 @@ describe('on-demand genome browser', () => {
     );
 
     expect(await screen.findByTestId('prepared-browser')).toHaveAttribute('data-ncbi', 'false');
-    expect(screen.getByLabelText('Genome files')).toHaveTextContent('ReferenceAvailablePromotersFailedAnnotationNot available');
+    expect(screen.queryByLabelText('Genome files')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
