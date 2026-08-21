@@ -22,9 +22,8 @@ describe('portal home', () => {
     expect(screen.getByLabelText('Release statistics')).not.toHaveTextContent('gtdb-r214-2026-08-13');
     expect(screen.getByText('80,789 assemblies')).toBeInTheDocument();
     expect(screen.getByText('Pseudomonadota')).toBeInTheDocument();
-    expect(screen.getByLabelText('Evidence statistics')).toHaveTextContent('Experimental promotersNot cataloged');
-    expect(screen.getByLabelText('Evidence statistics')).toHaveTextContent('Experimental TSSNot cataloged');
-    expect(screen.getByText(/No experimental datasets are included in this release yet/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Predictions and observations stay separate' })).toBeInTheDocument();
+    expect(screen.getByText(/RAPPtor promoter peaks are model predictions/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Release downloads')).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('gtdb-r214-2026-08-13');
     expect(fetchSpy).not.toHaveBeenCalled();

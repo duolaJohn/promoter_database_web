@@ -99,13 +99,6 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .evidence-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 72px; align-items: center; }
 .evidence-layout .portal-kicker { color: #70d8cf; }
 .evidence-layout p { margin: 0; color: #c5d1cd; line-height: 1.7; }
-.evidence-catalog { display: grid; gap: 20px; }
-.evidence-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #41524e; }
-.evidence-summary > div { min-width: 0; display: grid; gap: 6px; align-content: start; padding: 18px; border-right: 1px solid #41524e; }
-.evidence-summary > div:last-child { border-right: 0; }
-.evidence-summary span { color: #9eb0ab; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-.evidence-summary strong { color: white; font: 600 20px Georgia, serif; overflow-wrap: anywhere; }
-.evidence-summary small { color: #9eb0ab; font-size: 11px; line-height: 1.45; }
 .portal-text-link { display: inline-flex; align-items: center; gap: 6px; color: var(--teal-dark); font-size: 14px; font-weight: 750; white-space: nowrap; }
 .evidence-layout .portal-text-link { color: #f0ba70; }
 .portal-text-link:hover { text-decoration: underline; }
@@ -329,9 +322,6 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
   .metrics-grid strong { font-size: 22px; }
   .portal-section { padding-block: 62px; }
   .split-section, .evidence-layout { grid-template-columns: 1fr; gap: 34px; }
-  .evidence-summary { grid-template-columns: 1fr; }
-  .evidence-summary > div { border-right: 0; border-bottom: 1px solid #41524e; }
-  .evidence-summary > div:last-child { border-bottom: 0; }
   .phyla-row { grid-template-columns: minmax(92px, 130px) 1fr 52px; gap: 10px; }
   .page-intro { padding-block: 44px 28px; }
   .page-intro h1, .detail-heading h1, .genome-browser-header h1, .portal-state-page h1 { font-size: 38px; }
