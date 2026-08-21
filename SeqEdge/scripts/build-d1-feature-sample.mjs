@@ -130,6 +130,8 @@ async function main() {
       genomeCount: genomes.length,
       featureCount: genomes.reduce((sum, genome) => sum + genome.predictedPromoterCount, 0),
     },
+    totalExperimentalGenomes: genomes.filter((genome) => (genome.experimentalDatasetCount || 0) > 0 || genome.experimentalTssCount > 0 || (genome.experimentalPromoterCount || 0) > 0).length,
+    totalEvidencePublications: 0,
   };
 
   const lines = [

@@ -14,6 +14,10 @@
   "totalCircularOriginSplitFeatures": 0,
   "totalCircularOriginSplitGenomes": 0,
   "totalExperimentalTss": 0,
+  "totalExperimentalGenomes": 0,
+  "totalExperimentalPromoters": 0,
+  "totalExperimentalDatasets": 0,
+  "totalEvidencePublications": 0,
   "topPhyla": [
     { "name": "Pseudomonadota", "count": 21693 },
     { "name": "Bacillota_A", "count": 11264 },

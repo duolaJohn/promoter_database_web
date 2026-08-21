@@ -57,7 +57,7 @@ describe('JSON genome catalog repository', () => {
   it('combines text, taxonomy, source, and unavailable annotation filters', async () => {
     const genomes = [
       makeGenome({ accession: 'GCA_000000001.1', organismName: 'Annotated bacillus', phylum: 'Bacillota', genomeSource: 'isolate', annotationStatus: 'available' }),
-      makeGenome({ accession: 'GCA_000000002.1', organismName: 'Prediction only', phylum: 'Bacillota', genomeSource: 'MAG', annotationStatus: 'missing' }),
+      makeGenome({ accession: 'GCA_000000002.1', organismName: 'Prediction only', phylum: 'Bacillota', genomeSource: 'MAG', annotationStatus: 'missing', experimentalDatasetCount: 1, experimentalTssCount: 3 }),
       makeGenome({ accession: 'GCA_000000003.1', organismName: 'Incompatible bacillus', phylum: 'Pseudomonadota', genomeSource: 'MAG', annotationStatus: 'incompatible' }),
     ];
     mockedReadFile.mockReturnValue(catalogJson(genomes));
@@ -68,6 +68,7 @@ describe('JSON genome catalog repository', () => {
       taxonomy: { ...DEFAULT_GENOME_SEARCH_QUERY.taxonomy, phylum: 'Bacillota' },
       source: 'MAG',
       annotation: 'unavailable',
+      evidence: 'available',
     });
     expect(result.items.map((item) => item.accession)).toEqual(['GCA_000000002.1']);
     expect(result.facets.taxonomy.phylum).toEqual(['Bacillota', 'Pseudomonadota']);

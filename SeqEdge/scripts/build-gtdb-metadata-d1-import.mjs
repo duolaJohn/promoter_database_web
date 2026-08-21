@@ -30,6 +30,8 @@ function normalizedTokens(record) {
   const exactValues = [
     record.accession,
     String(record.accession).replace(/\.\d+$/, ''),
+    record.genbankAssemblyAccession,
+    record.refseqAssemblyAccession,
     record.ncbiTaxId,
   ];
   const wordValues = [
@@ -139,7 +141,7 @@ const genomeInsert = batchedInsert('genomes', [
   'genbank_assembly_accession', 'refseq_assembly_accession', 'taxonomy_raw', 'species', 'taxonomy_source',
   'gtdb_representative', 'gtdb_genome_representative', 'contig_n50', 'longest_contig_bp', 'ambiguous_bases',
   'coding_density', 'protein_count', 'trna_count', 'ssu_rrna_count', 'lsu_23s_rrna_count', 'strain_heterogeneity',
-  'mimag_quality', 'assembly_source_url',
+  'mimag_quality', 'assembly_source_url', 'reference_namespace', 'reference_accession', 'reference_provenance_json',
 ]);
 const featureInsert = batchedInsert('feature_sets', [
   'release_id', 'accession', 'definition_id', 'feature_type', 'evidence_type', 'count_unit', 'feature_count', 'status',
@@ -206,7 +208,9 @@ for await (const line of lines) {
     sqlText(record.gtdbGenomeRepresentative), sqlNumber(record.contigN50), sqlNumber(record.longestContigBp),
     sqlNumber(record.ambiguousBases), sqlNumber(record.codingDensity), sqlNumber(record.proteinCount), sqlNumber(record.trnaCount),
     sqlNumber(record.ssuRrnaCount), sqlNumber(record.lsu23sRrnaCount), sqlNumber(record.strainHeterogeneity),
-    sqlText(mimagQuality(record)), sqlText(record.assemblySourceUrl),
+    sqlText(mimagQuality(record)), sqlText(record.assemblySourceUrl), sqlText('ncbi_assembly'),
+    sqlText(record.refseqAssemblyAccession || record.genbankAssemblyAccession || record.accession),
+    sqlText(JSON.stringify({ sourceUrl: record.assemblySourceUrl || null, catalogSource: record.taxonomySource || null })),
   ]);
   if (genomeStatement) await genomeWriter.write(genomeStatement);
 
@@ -272,6 +276,8 @@ const featureSummary = {
   annotationAvailable: summary.annotationAvailable,
   annotationMissing: summary.annotationMissing,
   experimentalTss: 0,
+  totalExperimentalGenomes: 0,
+  totalEvidencePublications: 0,
   topPhyla: [...[...facets.values()]
     .filter(({ row }) => row[0] === 'phylum')
     .reduce((counts, { row, count }) => counts.set(row[1], (counts.get(row[1]) || 0) + count), new Map())

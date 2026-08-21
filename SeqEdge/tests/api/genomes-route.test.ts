@@ -16,6 +16,8 @@ function catalogJson(count = 30) {
     genomes: Array.from({ length: count }, (_, index) => makeGenome({
       accession: `GCA_${String(411_415 + index).padStart(9, '0')}.1`,
       organismName: `Genome ${index}`,
+      experimentalDatasetCount: index === 0 ? 1 : 0,
+      experimentalTssCount: index === 0 ? 3 : 0,
     })),
   });
 }
@@ -59,6 +61,12 @@ describe('GET /api/genomes', () => {
     expect(filtered.status).toBe(200);
     const filteredBody = await filtered.json() as GenomeSearchResponse;
     expect(filteredBody.items).toHaveLength(1);
+
+    const evidence = await GET(new Request('http://localhost/api/genomes?evidence=available'));
+    expect(evidence.status).toBe(200);
+    expect((await evidence.json() as GenomeSearchResponse).items).toHaveLength(1);
+
+    expect((await GET(new Request('http://localhost/api/genomes?evidence=invalid'))).status).toBe(400);
   });
 
   it('returns 400 for malformed cursors', async () => {

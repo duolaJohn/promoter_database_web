@@ -20,6 +20,9 @@ const genomes = Array.from({ length: 30 }, (_, index) => makeGenome({
   genomeSource: index % 3 === 0 ? 'isolate' : 'MAG',
   genomeSizeBp: 1_000_000 + index,
   predictedPromoterCount: index * 100,
+  experimentalPromoterCount: index === 0 ? 7 : 0,
+  experimentalTssCount: index === 0 ? 3 : 0,
+  experimentalDatasetCount: index === 0 ? 2 : 0,
   annotationStatus: index % 5 === 0 ? 'available' : 'missing',
 }));
 
@@ -48,8 +51,11 @@ describe('portal genome explorer', () => {
 
     expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Domain')).toHaveValue('Bacteria');
+    expect(within(screen.getByLabelText('NCBI annotation')).getByRole('option', { name: 'Available' })).toBeInTheDocument();
     expect(screen.getAllByText('Available').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Missing').length).toBeGreaterThan(0);
+    expect(screen.getByText('2 datasets · 7 promoters · 3 TSS')).toBeInTheDocument();
     expect(screen.queryByText('NCBI cataloged')).not.toBeInTheDocument();
     await user.type(screen.getByPlaceholderText(/Search accession/), 'Annotated');
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -73,6 +79,16 @@ describe('portal genome explorer', () => {
     expect(screen.getByRole('link', { name: 'GCA_000411415.1' })).toBeInTheDocument();
   });
 
+  it('requests genomes with cataloged experimental data', async () => {
+    const fetchMock = installFetch();
+    const user = userEvent.setup();
+    render(<PortalGenomeExplorer initialResult={response()} />);
+
+    await user.selectOptions(screen.getByLabelText('Experimental data'), 'available');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('evidence=available');
+  });
+
   it('returns to the first page when page size changes', async () => {
     const fetchMock = installFetch();
     const user = userEvent.setup();
@@ -92,9 +108,7 @@ describe('portal genome explorer', () => {
     const user = userEvent.setup();
     render(<PortalGenomeExplorer initialResult={response()} />);
 
-    expect(screen.getByLabelText('Phylum')).toBeDisabled();
-    await user.selectOptions(screen.getByLabelText('Domain'), 'Bacteria');
-    await waitFor(() => expect(screen.getByLabelText('Phylum')).toBeEnabled());
+    expect(screen.getByLabelText('Phylum')).toBeEnabled();
     await user.selectOptions(screen.getByLabelText('Phylum'), 'Pseudomonadota');
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const lastUrl = fetchMock.mock.calls.at(-1)?.[0] as string;
@@ -114,15 +128,15 @@ describe('portal genome explorer', () => {
     const user = userEvent.setup();
     render(<PortalGenomeExplorer initialResult={response()} />);
 
-    await user.selectOptions(screen.getByLabelText('Domain'), 'Bacteria');
+    await user.selectOptions(screen.getByLabelText('Phylum'), 'Pseudomonadota');
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.getByLabelText('Phylum')).toBeDisabled();
     expect(screen.getByLabelText('Class')).toBeDisabled();
-    expect(screen.getByRole('progressbar', { name: 'Loading Phylum options' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Order')).toBeDisabled();
+    expect(screen.getByRole('progressbar', { name: 'Loading Class options' })).toBeInTheDocument();
 
     resolveRequest({ ok: true, json: async () => response(genomes.slice(0, 8), 8) });
-    await waitFor(() => expect(screen.getByLabelText('Phylum')).toBeEnabled());
-    expect(screen.queryByRole('progressbar', { name: 'Loading Phylum options' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Class')).toBeEnabled());
+    expect(screen.queryByRole('progressbar', { name: 'Loading Class options' })).not.toBeInTheDocument();
   });
 
   it('keeps rows and exposes a retry action after an API error', async () => {

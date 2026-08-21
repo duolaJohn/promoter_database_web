@@ -1,5 +1,6 @@
 import type {
   GenomeAnnotationFilter,
+  GenomeEvidenceFilter,
   GenomeSearchQuery,
   GenomeSortDirection,
   GenomeSortField,
@@ -11,8 +12,11 @@ const MAX_CURSOR_LENGTH = 4_096;
 const SORT_FIELDS = new Set<GenomeSortField>(['accession', 'organism', 'genome-size', 'promoters']);
 const SORT_DIRECTIONS = new Set<GenomeSortDirection>(['asc', 'desc']);
 const ANNOTATION_FILTERS = new Set<GenomeAnnotationFilter>(['', 'available', 'unavailable']);
+const EVIDENCE_FILTERS = new Set<GenomeEvidenceFilter>(['', 'available', 'unavailable']);
 const PAGE_SIZES = new Set([25, 50, 100]);
 const MAX_SEARCH_TOKENS = 8;
+
+export const DEFAULT_CATALOG_DOMAIN = 'Bacteria';
 
 export class GenomeSearchQueryError extends Error {
   constructor(message: string) {
@@ -37,6 +41,7 @@ export const DEFAULT_GENOME_SEARCH_QUERY: GenomeSearchQuery = {
   },
   source: '',
   annotation: '',
+  evidence: '',
   sort: 'accession',
   direction: 'asc',
   limit: 25,
@@ -59,6 +64,8 @@ export function parseGenomeSearchParams(params: URLSearchParams): GenomeSearchQu
 
   const annotationValue = boundedValue(params, 'annotation');
   if (!ANNOTATION_FILTERS.has(annotationValue as GenomeAnnotationFilter)) throw new GenomeSearchQueryError('annotation is invalid');
+  const evidenceValue = boundedValue(params, 'evidence');
+  if (!EVIDENCE_FILTERS.has(evidenceValue as GenomeEvidenceFilter)) throw new GenomeSearchQueryError('evidence is invalid');
 
   const limitValue = boundedValue(params, 'limit');
   const parsedLimit = limitValue ? Number(limitValue) : DEFAULT_GENOME_SEARCH_QUERY.limit;
@@ -83,6 +90,7 @@ export function parseGenomeSearchParams(params: URLSearchParams): GenomeSearchQu
     taxonomy,
     source: boundedValue(params, 'source'),
     annotation: annotationValue as GenomeAnnotationFilter,
+    evidence: evidenceValue as GenomeEvidenceFilter,
     sort,
     direction: directionValue as GenomeSortDirection,
     limit: parsedLimit as GenomeSearchQuery['limit'],

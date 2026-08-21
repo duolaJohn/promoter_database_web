@@ -21,6 +21,8 @@ export function makeGenome(overrides: Partial<ReleaseGenome> = {}): ReleaseGenom
     completeness: 99.5,
     contamination: 0.2,
     predictedPromoterCount: 2_400,
+    experimentalPromoterCount: 0,
+    experimentalDatasetCount: 0,
     annotationStatus: 'missing',
     annotationFeatureCount: 0,
     experimentalTssCount: 0,
@@ -59,6 +61,10 @@ export function makeCatalog(genomes: ReleaseGenome[]): ReleaseCatalog {
     totalCircularOriginSplitFeatures: genomes.reduce((sum, genome) => sum + (genome.annotationCircularOriginSplitCount || 0), 0),
     totalCircularOriginSplitGenomes: genomes.filter((genome) => (genome.annotationCircularOriginSplitCount || 0) > 0).length,
     totalExperimentalTss: genomes.reduce((sum, genome) => sum + genome.experimentalTssCount, 0),
+    totalExperimentalGenomes: genomes.filter((genome) => (genome.experimentalDatasetCount || 0) > 0 || genome.experimentalTssCount > 0 || (genome.experimentalPromoterCount || 0) > 0).length,
+    totalExperimentalPromoters: genomes.reduce((sum, genome) => sum + (genome.experimentalPromoterCount || 0), 0),
+    totalExperimentalDatasets: genomes.reduce((sum, genome) => sum + (genome.experimentalDatasetCount || 0), 0),
+    totalEvidencePublications: 0,
     topPhyla: [{ name: 'Bacillota', count: genomes.length }],
   };
 }
@@ -78,6 +84,9 @@ export function makeCatalogRow(genome: ReleaseGenome): GenomeCatalogRow {
     genomeSizeBp: genome.genomeSizeBp,
     contigCount: genome.contigCount,
     predictedPromoterCount: genome.predictedPromoterCount,
+    experimentalPromoterCount: genome.experimentalPromoterCount || 0,
+    experimentalTssCount: genome.experimentalTssCount,
+    experimentalDatasetCount: genome.experimentalDatasetCount || 0,
     annotationStatus: genome.annotationStatus,
   };
 }

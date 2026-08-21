@@ -79,6 +79,12 @@ function normalizeGenome(value: unknown): ReleaseGenome | null {
   const experimentalTssCount = numberValue(entry, ['experimentalTssCount', 'experimental_tss_count'])
     ?? numberValue(counts, ['experimentalTss', 'experimental_tss'])
     ?? 0;
+  const experimentalPromoterCount = numberValue(entry, ['experimentalPromoterCount', 'experimental_promoter_count'])
+    ?? numberValue(counts, ['experimentalPromoters', 'experimental_promoters'])
+    ?? 0;
+  const experimentalDatasetCount = numberValue(entry, ['experimentalDatasetCount', 'experimental_dataset_count'])
+    ?? numberValue(counts, ['experimentalDatasets', 'experimental_datasets'])
+    ?? 0;
   const predictedPromoterCount = numberValue(entry, ['predictedPromoterCount', 'predicted_promoter_count', 'promoterCount', 'promoter_count'])
     ?? numberValue(counts, ['predictedPromoters', 'predicted_promoters', 'promoters'])
     ?? 0;
@@ -131,6 +137,8 @@ function normalizeGenome(value: unknown): ReleaseGenome | null {
     completeness: numberValue(entry, ['completeness']) ?? numberValue(stats, ['completeness']),
     contamination: numberValue(entry, ['contamination']) ?? numberValue(stats, ['contamination']),
     predictedPromoterCount,
+    experimentalPromoterCount,
+    experimentalDatasetCount,
     annotationStatus,
     annotationFeatureCount: numberValue(entry, ['annotationFeatureCount', 'annotation_feature_count']) ?? 0,
     annotationCircularOriginSplitCount: numberValue(entry, ['annotationCircularOriginSplitCount', 'annotation_circular_origin_split_count']) ?? 0,
@@ -196,6 +204,13 @@ function normalizeCatalog(raw: unknown): ReleaseCatalog {
     ?? genomes.reduce((sum, genome) => sum + genome.predictedPromoterCount, 0);
   const totalExperimentalTss = numberValue(summary, ['totalExperimentalTss', 'total_experimental_tss'])
     ?? genomes.reduce((sum, genome) => sum + genome.experimentalTssCount, 0);
+  const totalExperimentalPromoters = numberValue(summary, ['totalExperimentalPromoters', 'total_experimental_promoters'])
+    ?? genomes.reduce((sum, genome) => sum + (genome.experimentalPromoterCount || 0), 0);
+  const totalExperimentalDatasets = numberValue(summary, ['totalExperimentalDatasets', 'total_experimental_datasets'])
+    ?? genomes.reduce((sum, genome) => sum + (genome.experimentalDatasetCount || 0), 0);
+  const totalExperimentalGenomes = numberValue(summary, ['totalExperimentalGenomes', 'total_experimental_genomes'])
+    ?? genomes.filter((genome) => (genome.experimentalDatasetCount || 0) > 0 || genome.experimentalTssCount > 0 || (genome.experimentalPromoterCount || 0) > 0).length;
+  const totalEvidencePublications = numberValue(summary, ['totalEvidencePublications', 'total_evidence_publications']) ?? 0;
   const derivedUsableAnnotations = genomes.filter((genome) => genome.annotationStatus === 'available').length;
   const derivedIncompatibleAnnotations = genomes.filter((genome) => genome.annotationStatus === 'incompatible').length;
   const derivedMissingAnnotations = genomes.filter((genome) => genome.annotationStatus === 'missing').length;
@@ -255,6 +270,10 @@ function normalizeCatalog(raw: unknown): ReleaseCatalog {
     totalCircularOriginSplitFeatures,
     totalCircularOriginSplitGenomes,
     totalExperimentalTss,
+    totalExperimentalGenomes,
+    totalExperimentalPromoters,
+    totalExperimentalDatasets,
+    totalEvidencePublications,
     topPhyla: configuredTopPhyla.length ? configuredTopPhyla.slice(0, 8) : buildTopPhyla(genomes),
   };
 }

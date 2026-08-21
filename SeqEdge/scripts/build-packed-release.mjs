@@ -411,6 +411,8 @@ export async function buildPackedRelease({ projectRoot, source, release, sourceR
     totalCircularOriginSplitFeatures: summaryValue(summary, ['circularOriginSplitFeatures']),
     totalCircularOriginSplitGenomes: summaryValue(summary, ['circularOriginSplitGenomes']),
     totalExperimentalTss: summaryValue(summary, ['totalExperimentalTss']),
+    totalExperimentalGenomes: genomes.filter((genome) => (genome.experimentalDatasetCount || 0) > 0 || genome.experimentalTssCount > 0 || (genome.experimentalPromoterCount || 0) > 0).length,
+    totalEvidencePublications: summaryValue(summary, ['totalEvidencePublications']),
     topPhyla,
   };
   const releaseValues = [

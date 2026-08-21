@@ -10,9 +10,10 @@ import ArrowUpwardRoundedIcon from '@mui/icons-material/ArrowUpwardRounded';
 import ArrowDownwardRoundedIcon from '@mui/icons-material/ArrowDownwardRounded';
 import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
 import CircularProgress from '@mui/material/CircularProgress';
-import { defaultGenomeSortDirection } from '@/lib/genome-search-query';
+import { DEFAULT_CATALOG_DOMAIN, defaultGenomeSortDirection } from '@/lib/genome-search-query';
 import type {
   GenomeAnnotationFilter,
+  GenomeEvidenceFilter,
   GenomeSearchQuery,
   GenomeSearchResponse,
   GenomeSortDirection,
@@ -22,16 +23,16 @@ import type {
 } from '@/types/genome-catalog';
 
 const TAXONOMY_RANKS = [
-  { key: 'domain', label: 'Domain', allLabel: 'All domains' },
-  { key: 'phylum', label: 'Phylum', allLabel: 'All phyla' },
-  { key: 'class', label: 'Class', allLabel: 'All classes' },
-  { key: 'order', label: 'Order', allLabel: 'All orders' },
-  { key: 'family', label: 'Family', allLabel: 'All families' },
-  { key: 'genus', label: 'Genus', allLabel: 'All genera' },
+  { key: 'domain', label: 'Domain', emptyLabel: 'All domains' },
+  { key: 'phylum', label: 'Phylum', emptyLabel: 'Any' },
+  { key: 'class', label: 'Class', emptyLabel: 'Any' },
+  { key: 'order', label: 'Order', emptyLabel: 'Any' },
+  { key: 'family', label: 'Family', emptyLabel: 'Any' },
+  { key: 'genus', label: 'Genus', emptyLabel: 'Any' },
 ] as const;
 
-const EMPTY_TAXONOMY: GenomeTaxonomyFilters = {
-  domain: '',
+const DEFAULT_TAXONOMY: GenomeTaxonomyFilters = {
+  domain: DEFAULT_CATALOG_DOMAIN,
   phylum: '',
   class: '',
   order: '',
@@ -54,6 +55,13 @@ function formatCount(value: number | null) {
   return value === null ? 'Not reported' : new Intl.NumberFormat('en-US').format(value);
 }
 
+function ExperimentalEvidence({ genome }: { genome: GenomeSearchResponse['items'][number] }) {
+  const datasets = genome.experimentalDatasetCount || 0;
+  if (!datasets) return <><span className="evidence-muted">Missing</span><small>No literature datasets</small></>;
+  const datasetLabel = `${datasets.toLocaleString()} ${datasets === 1 ? 'dataset' : 'datasets'}`;
+  return <><span className="evidence-available">Available</span><small>{datasetLabel} · {(genome.experimentalPromoterCount || 0).toLocaleString()} promoters · {(genome.experimentalTssCount || 0).toLocaleString()} TSS</small></>;
+}
+
 function buildRequestUrl(query: GenomeSearchQuery) {
   const params = new URLSearchParams();
   if (query.q) params.set('q', query.q);
@@ -62,6 +70,7 @@ function buildRequestUrl(query: GenomeSearchQuery) {
   }
   if (query.source) params.set('source', query.source);
   if (query.annotation) params.set('annotation', query.annotation);
+  if (query.evidence) params.set('evidence', query.evidence);
   params.set('sort', query.sort);
   params.set('direction', query.direction);
   params.set('limit', String(query.limit));
@@ -72,9 +81,10 @@ function buildRequestUrl(query: GenomeSearchQuery) {
 export default function PortalGenomeExplorer({ initialResult }: { initialResult: GenomeSearchResponse }) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [taxonomy, setTaxonomy] = useState<GenomeTaxonomyFilters>(EMPTY_TAXONOMY);
+  const [taxonomy, setTaxonomy] = useState<GenomeTaxonomyFilters>(DEFAULT_TAXONOMY);
   const [source, setSource] = useState('');
   const [annotationStatus, setAnnotationStatus] = useState<GenomeAnnotationFilter>('');
+  const [evidenceStatus, setEvidenceStatus] = useState<GenomeEvidenceFilter>('');
   const [sortField, setSortField] = useState<GenomeSortField>('accession');
   const [sortDirection, setSortDirection] = useState<GenomeSortDirection>('asc');
   const [pageSize, setPageSize] = useState<GenomeSearchQuery['limit']>(25);
@@ -98,10 +108,11 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
     taxonomy,
     source,
     annotation: annotationStatus,
+    evidence: evidenceStatus,
     sort: sortField,
     direction: sortDirection,
     limit: pageSize,
-  }), [annotationStatus, debouncedQuery, pageSize, sortDirection, sortField, source, taxonomy]);
+  }), [annotationStatus, debouncedQuery, evidenceStatus, pageSize, sortDirection, sortField, source, taxonomy]);
 
   const requestPage = useCallback(async (navigation: NavigationRequest) => {
     requestRef.current?.abort();
@@ -156,10 +167,11 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
   const clearFilters = () => {
     setQuery('');
     setDebouncedQuery('');
-    setTaxonomy(EMPTY_TAXONOMY);
+    setTaxonomy(DEFAULT_TAXONOMY);
     setStaleTaxonomyFrom(null);
     setSource('');
     setAnnotationStatus('');
+    setEvidenceStatus('');
     setSortField('accession');
     setSortDirection('asc');
   };
@@ -238,7 +250,15 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
           <span>NCBI annotation</span>
           <select value={annotationStatus} onChange={(event) => setAnnotationStatus(event.target.value as GenomeAnnotationFilter)}>
             <option value="">Any status</option>
-            <option value="available">Cataloged</option>
+            <option value="available">Available</option>
+            <option value="unavailable">Missing</option>
+          </select>
+        </label>
+        <label>
+          <span>Experimental data</span>
+          <select value={evidenceStatus} onChange={(event) => setEvidenceStatus(event.target.value as GenomeEvidenceFilter)}>
+            <option value="">Any status</option>
+            <option value="available">Available</option>
             <option value="unavailable">Missing</option>
           </select>
         </label>
@@ -262,7 +282,7 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
                     aria-busy={loadingThisRank || undefined}
                     onChange={(event) => updateTaxonomy(rank.key, event.target.value)}
                   >
-                    <option value="">{rank.allLabel}</option>
+                    <option value="">{rank.emptyLabel}</option>
                     {result.facets.taxonomy[rank.key].map((value) => <option key={value} value={value}>{value}</option>)}
                   </select>
                   {loadingThisRank ? <CircularProgress className="catalog-taxonomy-spinner" size={16} thickness={5} aria-label={`Loading ${rank.label} options`} /> : null}
@@ -288,6 +308,7 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
             <th>Taxonomy</th>
             <th className="catalog-sortable-heading" aria-sort={sortField === 'genome-size' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}>{sortHeader('genome-size', 'Assembly size')}</th>
             <th className="catalog-sortable-heading" aria-sort={sortField === 'promoters' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}>{sortHeader('promoters', 'Predicted promoters')}</th>
+            <th>Experimental data</th>
             <th>Annotation</th>
           </tr></thead>
           <tbody>
@@ -298,12 +319,13 @@ export default function PortalGenomeExplorer({ initialResult }: { initialResult:
                 <td><span>{genome.phylum || 'Unclassified'}</span><small>{genome.genus || 'Genus not assigned'}</small></td>
                 <td><span>{formatCount(genome.genomeSizeBp)} bp</span><small>{formatCount(genome.contigCount)} contigs</small></td>
                 <td className="numeric-cell">{genome.predictedPromoterCount.toLocaleString()}</td>
+                <td className="catalog-evidence-cell"><ExperimentalEvidence genome={genome} /></td>
                 <td>{genome.annotationStatus === 'available'
                   ? <span className="evidence-available">Available</span>
                   : <span className="evidence-muted">Missing</span>}</td>
               </tr>
             ))}
-            {result.items.length === 0 && <tr><td colSpan={6} className="catalog-empty">No genomes match the current filters.</td></tr>}
+            {result.items.length === 0 && <tr><td colSpan={7} className="catalog-empty">No genomes match the current filters.</td></tr>}
           </tbody>
         </table>
       </div>

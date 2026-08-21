@@ -88,6 +88,9 @@ function toCatalogRow(genome: ReleaseGenome): GenomeCatalogRow {
     genomeSizeBp: genome.genomeSizeBp,
     contigCount: genome.contigCount,
     predictedPromoterCount: genome.predictedPromoterCount,
+    experimentalPromoterCount: genome.experimentalPromoterCount || 0,
+    experimentalTssCount: genome.experimentalTssCount || 0,
+    experimentalDatasetCount: genome.experimentalDatasetCount || 0,
     annotationStatus: genome.annotationStatus,
   };
 }
@@ -125,6 +128,7 @@ function querySignature(query: GenomeSearchQuery) {
     taxonomy: query.taxonomy,
     source: query.source,
     annotation: query.annotation,
+    evidence: query.evidence,
     sort: query.sort,
     direction: query.direction,
     limit: query.limit,
@@ -208,7 +212,10 @@ function matchesQuery(genome: ReleaseGenome, query: GenomeSearchQuery) {
   const matchesSource = !query.source || genome.genomeSource === query.source;
   const matchesAnnotation = !query.annotation
     || (query.annotation === 'available' ? genome.annotationStatus === 'available' : genome.annotationStatus !== 'available');
-  return matchesText && matchesTaxonomy && matchesSource && matchesAnnotation;
+  const hasExperimentalEvidence = (genome.experimentalDatasetCount || 0) > 0;
+  const matchesEvidence = !query.evidence
+    || (query.evidence === 'available' ? hasExperimentalEvidence : !hasExperimentalEvidence);
+  return matchesText && matchesTaxonomy && matchesSource && matchesAnnotation && matchesEvidence;
 }
 
 class JsonGenomeCatalogRepository implements GenomeCatalogRepository {
@@ -277,6 +284,10 @@ class JsonGenomeCatalogRepository implements GenomeCatalogRepository {
       totalCircularOriginSplitFeatures: catalog.totalCircularOriginSplitFeatures,
       totalCircularOriginSplitGenomes: catalog.totalCircularOriginSplitGenomes,
       totalExperimentalTss: catalog.totalExperimentalTss,
+      totalExperimentalGenomes: catalog.totalExperimentalGenomes || 0,
+      totalExperimentalPromoters: catalog.totalExperimentalPromoters || 0,
+      totalExperimentalDatasets: catalog.totalExperimentalDatasets || 0,
+      totalEvidencePublications: catalog.totalEvidencePublications || 0,
       topPhyla: catalog.topPhyla,
       releaseAssetBaseUrl: process.env.NEXT_PUBLIC_RELEASE_ASSET_BASE_URL || null,
       manifestIndexPath: null,
@@ -448,6 +459,9 @@ function d1CatalogDetails(row: D1GenomeRow, release: D1ReleaseRow): GenomeCatalo
     ? referenceStorage.checksums as Record<string, unknown>
     : {};
   return {
+    referenceNamespace: row.reference_namespace as string | null,
+    referenceAccession: row.reference_accession as string | null,
+    referenceProvenance: parseJsonRecord(row.reference_provenance_json),
     ncbiOrganismName: row.ncbi_organism_name as string | null,
     ncbiTaxId: nullableNumber(row.ncbi_tax_id),
     assemblyName: row.assembly_name as string | null,
@@ -494,6 +508,7 @@ function d1AnnotationStatus(value: unknown): ReleaseGenome['annotationStatus'] {
 }
 
 function d1RowToCatalogRow(row: D1GenomeRow): GenomeCatalogRow {
+  const experimentalEvidence = parseJsonRecord(row.experimental_evidence_json);
   return {
     accession: String(row.accession),
     organismName: String(row.organism_name),
@@ -508,6 +523,9 @@ function d1RowToCatalogRow(row: D1GenomeRow): GenomeCatalogRow {
     genomeSizeBp: row.genome_size_bp as number | null,
     contigCount: row.contig_count as number | null,
     predictedPromoterCount: Number(row.predicted_promoter_count || 0),
+    experimentalPromoterCount: Number(experimentalEvidence.experimentalPromoters || 0),
+    experimentalTssCount: Number(experimentalEvidence.experimentalTss || 0),
+    experimentalDatasetCount: Number(experimentalEvidence.datasets || 0),
     annotationStatus: d1AnnotationStatus(row.annotation_status),
   };
 }
@@ -622,7 +640,7 @@ async function activeD1Release(database: D1Database) {
 }
 
 const D1_FEATURE_JOINS = [
-  "LEFT JOIN feature_sets p ON p.release_id = g.release_id AND p.accession = g.accession AND p.feature_type = 'promoter' AND p.is_default = 1",
+  "LEFT JOIN feature_sets p ON p.release_id = g.release_id AND p.accession = g.accession AND p.feature_type = 'promoter' AND p.evidence_type = 'prediction' AND p.is_default = 1",
   "LEFT JOIN feature_sets a ON a.release_id = g.release_id AND a.accession = g.accession AND a.feature_type = 'gene_annotation' AND a.is_default = 1",
 ].join(' ');
 
@@ -630,6 +648,8 @@ const D1_FEATURE_DEFINITION_JOINS = [
   'LEFT JOIN feature_definitions pd ON pd.release_id = p.release_id AND pd.definition_id = p.definition_id',
   'LEFT JOIN feature_definitions ad ON ad.release_id = a.release_id AND ad.definition_id = a.definition_id',
 ].join(' ');
+
+const D1_EXPERIMENTAL_EVIDENCE_WHERE = "e.release_id = g.release_id AND e.accession = g.accession AND e.status IN ('ready', 'staged') AND (e.feature_type = 'tss' OR (e.feature_type = 'promoter' AND e.evidence_type <> 'prediction'))";
 
 const D1_GENOME_SELECT = [
   'SELECT g.*',
@@ -653,6 +673,7 @@ const D1_LIST_SELECT = [
   ', g.genome_source, g.genome_size_bp, g.contig_count',
   ', p.feature_count AS predicted_promoter_count, p.status AS promoter_status',
   ', a.feature_count AS annotation_feature_count, a.status AS annotation_status',
+  `, COALESCE((SELECT json_object('experimentalPromoters', COALESCE(SUM(CASE WHEN e.feature_type = 'promoter' THEN e.feature_count ELSE 0 END), 0), 'experimentalTss', COALESCE(SUM(CASE WHEN e.feature_type = 'tss' THEN e.feature_count ELSE 0 END), 0), 'datasets', COUNT(DISTINCT e.definition_id)) FROM feature_sets e WHERE ${D1_EXPERIMENTAL_EVIDENCE_WHERE}), '{}') AS experimental_evidence_json`,
   'FROM genomes g',
   D1_FEATURE_JOINS,
 ].join(' ');
@@ -718,6 +739,8 @@ function d1Where(query: GenomeSearchQuery, releaseId: string, taxonomyMatches: M
   if (query.source) { clauses.push('g.genome_source = ?'); bindings.push(query.source); }
   if (query.annotation === 'available') clauses.push("a.status IN ('ready', 'staged')");
   else if (query.annotation === 'unavailable') clauses.push("COALESCE(a.status, 'missing') NOT IN ('ready', 'staged')");
+  if (query.evidence === 'available') clauses.push(`EXISTS (SELECT 1 FROM feature_sets e WHERE ${D1_EXPERIMENTAL_EVIDENCE_WHERE})`);
+  else if (query.evidence === 'unavailable') clauses.push(`NOT EXISTS (SELECT 1 FROM feature_sets e WHERE ${D1_EXPERIMENTAL_EVIDENCE_WHERE})`);
   return { clauses, bindings };
 }
 
@@ -844,7 +867,7 @@ async function d1Facets(database: D1Database, releaseId: string, query: GenomeSe
 }
 
 function hasGenomeFilters(query: GenomeSearchQuery) {
-  return Boolean(query.q || query.source || query.annotation || Object.values(query.taxonomy).some(Boolean));
+  return Boolean(query.q || query.source || query.annotation || query.evidence || Object.values(query.taxonomy).some(Boolean));
 }
 
 export class D1GenomeCatalogRepository implements GenomeCatalogRepository {
@@ -1011,6 +1034,11 @@ export class D1GenomeCatalogRepository implements GenomeCatalogRepository {
     const annotationCataloged = hasPrecomputedCounts
       ? Number(summary.annotationAvailable || 0)
       : Number(annotationReady?.genome_count || 0) + Number(annotationStaged?.genome_count || 0);
+    const totalExperimentalGenomes = Number.isFinite(Number(summary.totalExperimentalGenomes))
+      ? Number(summary.totalExperimentalGenomes)
+      : Number((await this.database.prepare(
+        `SELECT COUNT(DISTINCT accession) AS count FROM feature_sets WHERE release_id = ? AND status IN ('ready', 'staged') AND (feature_type = 'tss' OR (feature_type = 'promoter' AND evidence_type <> 'prediction'))`,
+      ).bind(releaseId).first<{ count: number }>())?.count || 0);
     return {
       releaseId, sourceReleaseId: row.source_release_id as string | null,
       releaseDate: row.release_date as string | null, generatedAt: row.generated_at as string | null,
@@ -1025,6 +1053,10 @@ export class D1GenomeCatalogRepository implements GenomeCatalogRepository {
       totalCircularOriginSplitFeatures: Number(summary.totalCircularOriginSplitFeatures || 0),
       totalCircularOriginSplitGenomes: Number(summary.totalCircularOriginSplitGenomes || 0),
       totalExperimentalTss: Number(summary.totalExperimentalTss || 0),
+      totalExperimentalGenomes,
+      totalExperimentalPromoters: Number(summary.totalExperimentalPromoters || 0),
+      totalExperimentalDatasets: Number(summary.totalExperimentalDatasets || 0),
+      totalEvidencePublications: Number(summary.totalEvidencePublications || 0),
       topPhyla: Array.isArray(summary.topPhyla) ? summary.topPhyla as ActiveReleaseSummary['topPhyla'] : [],
       releaseAssetBaseUrl: row.release_asset_base_url as string | null, manifestIndexPath: row.manifest_index_path as string | null,
       resourceStatus,

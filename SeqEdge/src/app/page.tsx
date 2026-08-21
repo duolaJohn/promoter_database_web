@@ -23,6 +23,9 @@ export default function HomePage() {
   const largestPhylum = Math.max(1, ...catalog.topPhyla.map((item) => item.count));
   const releaseLabel = `SeqEdge ${catalog.releaseDate || catalog.releaseId}`;
   const releaseBase = (catalog.releaseAssetBaseUrl || process.env.NEXT_PUBLIC_RELEASE_ASSET_BASE_URL || '/api/local-release').replace(/\/+$/, '');
+  const experimentalPromoters = catalog.totalExperimentalPromoters || 0;
+  const experimentalTss = catalog.totalExperimentalTss || 0;
+  const experimentalDatasets = catalog.totalExperimentalDatasets || 0;
 
   return (
     <main>
@@ -31,7 +34,7 @@ export default function HomePage() {
           <div className="portal-hero-copy">
             <p className="portal-kicker">Bacterial promoter resource</p>
             <h1>SeqEdge</h1>
-            <p className="portal-hero-lead">Genome-resolved promoter predictions, reference assemblies and contextual NCBI annotations in a release-ready research portal.</p>
+            <p className="portal-hero-lead">Promoter predictions on shared GTDB reference assemblies, with a source-aware catalog ready for independently selectable literature datasets.</p>
             <div className="portal-actions">
               <Link href="/genomes" className="portal-button portal-button-primary">Explore genomes <ArrowForwardRoundedIcon fontSize="small" /></Link>
             </div>
@@ -51,6 +54,8 @@ export default function HomePage() {
           <div><PublicRoundedIcon aria-hidden="true" /><span>Genomes</span><strong>{catalog.totalGenomes.toLocaleString()}</strong></div>
           <div><DataObjectRoundedIcon aria-hidden="true" /><span>Predicted promoters</span><strong>{catalog.totalPredictedPromoters.toLocaleString()}</strong></div>
           <div><ScienceRoundedIcon aria-hidden="true" /><span>NCBI annotations cataloged</span><strong>{catalog.totalAnnotatedGenomes.toLocaleString()}</strong></div>
+          <div><ScienceRoundedIcon aria-hidden="true" /><span>Experimental genomes</span><strong>{(catalog.totalExperimentalGenomes || 0).toLocaleString()}</strong></div>
+          <div><PublicRoundedIcon aria-hidden="true" /><span>Source publications</span><strong>{(catalog.totalEvidencePublications || 0).toLocaleString()}</strong></div>
           <div className="release-metric"><span>Current release</span><strong>{releaseLabel}</strong><small>{taxonomyReleaseLabel(catalog.sourceReleaseId)}</small></div>
         </div>
       </section>
@@ -76,8 +81,17 @@ export default function HomePage() {
 
       <section className="portal-section evidence-band" id="evidence">
         <div className="portal-shell evidence-layout">
-          <div><p className="portal-kicker">Evidence boundaries</p><h2>Predictions and observations stay separate</h2></div>
-          <p>RAPPtor promoter peaks are model predictions. This release contains no experimental transcription start-site dataset, and NCBI feature annotations do not validate predicted peaks.</p>
+          <div><p className="portal-kicker">Evidence catalog</p><h2>Predictions and experiments stay separate</h2></div>
+          <div className="evidence-catalog">
+            <div className="evidence-summary" aria-label="Evidence statistics">
+              <div><span>Model predictions</span><strong>{catalog.totalPredictedPromoters.toLocaleString()}</strong><small>RAPPtor promoter peaks</small></div>
+              <div><span>Experimental promoters</span><strong>{experimentalPromoters ? experimentalPromoters.toLocaleString() : 'Not cataloged'}</strong><small>Direct promoter evidence</small></div>
+              <div><span>Experimental TSS</span><strong>{experimentalTss ? experimentalTss.toLocaleString() : 'Not cataloged'}</strong><small>Measured start sites</small></div>
+            </div>
+            <p>{experimentalDatasets
+              ? `${experimentalDatasets.toLocaleString()} experimental datasets are cataloged independently by publication, assay and condition.`
+              : 'No experimental datasets are included in this release yet. Future literature tracks will remain independently selectable by publication, assay and condition.'}</p>
+          </div>
         </div>
       </section>
 

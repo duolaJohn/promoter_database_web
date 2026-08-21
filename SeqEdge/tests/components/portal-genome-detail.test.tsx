@@ -27,6 +27,9 @@ function match(accession: string, status: 'available' | 'missing' | 'incompatibl
 
 function details(): GenomeCatalogDetails {
   return {
+    referenceNamespace: 'ncbi_assembly',
+    referenceAccession: 'GCF_000411415.1',
+    referenceProvenance: { catalogSource: 'GTDB R214.1' },
     ncbiOrganismName: 'Bacillus test organism',
     ncbiTaxId: 12_345,
     assemblyName: 'ASM12345v1',
@@ -202,7 +205,7 @@ describe('genome detail release contract', () => {
     render(await GenomeDetailPage({ params: Promise.resolve({ accession: 'GCA_000431335.1' }) }));
 
     expect(screen.getByTestId('browser-contract')).toHaveAttribute('data-ncbi', 'false');
-    expect(screen.getAllByText('incompatible')).not.toHaveLength(0);
+    expect(screen.getByLabelText('Genome files')).toHaveTextContent('AnnotationNot available');
     expect(screen.queryByText('Incompatible with assembly')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /NCBI annotation/ })).not.toBeInTheDocument();
     expect(screen.getAllByRole('link').filter((link) => link.hasAttribute('download'))).toHaveLength(0);

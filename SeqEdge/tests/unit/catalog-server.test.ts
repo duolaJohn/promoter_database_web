@@ -47,6 +47,7 @@ describe('release catalog normalization', () => {
     expect(result.catalog.totalCircularOriginSplitFeatures).toBe(0);
     expect(result.catalog.totalCircularOriginSplitGenomes).toBe(0);
     expect(result.catalog.totalExperimentalTss).toBe(2);
+    expect(result.catalog.totalExperimentalGenomes).toBe(1);
     expect(result.catalog.topPhyla).toEqual([
       { name: 'Bacillota', count: 1 },
       { name: 'Pseudomonadota', count: 1 },

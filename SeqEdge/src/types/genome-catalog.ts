@@ -4,6 +4,7 @@ import type { PlannedGenomeAssets } from '@/lib/hf-batch-assets';
 export type GenomeSortField = 'accession' | 'organism' | 'genome-size' | 'promoters';
 export type GenomeSortDirection = 'asc' | 'desc';
 export type GenomeAnnotationFilter = '' | 'available' | 'unavailable';
+export type GenomeEvidenceFilter = '' | 'available' | 'unavailable';
 export type GenomeTaxonomyRank = 'domain' | 'phylum' | 'class' | 'order' | 'family' | 'genus';
 
 export type GenomeTaxonomyFilters = Record<GenomeTaxonomyRank, string>;
@@ -23,6 +24,9 @@ export interface GenomeCatalogRow {
   genomeSizeBp: number | null;
   contigCount: number | null;
   predictedPromoterCount: number;
+  experimentalPromoterCount?: number;
+  experimentalTssCount?: number;
+  experimentalDatasetCount?: number;
   annotationStatus: ReleaseGenome['annotationStatus'];
 }
 
@@ -31,6 +35,7 @@ export interface GenomeSearchQuery {
   taxonomy: GenomeTaxonomyFilters;
   source: string;
   annotation: GenomeAnnotationFilter;
+  evidence: GenomeEvidenceFilter;
   sort: GenomeSortField;
   direction: GenomeSortDirection;
   limit: 25 | 50 | 100;
@@ -70,6 +75,9 @@ export interface GenomeFeatureDetails {
 }
 
 export interface GenomeCatalogDetails {
+  referenceNamespace: string | null;
+  referenceAccession: string | null;
+  referenceProvenance: Record<string, unknown>;
   ncbiOrganismName: string | null;
   ncbiTaxId: number | null;
   assemblyName: string | null;

@@ -75,9 +75,10 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .sequence-locus strong { text-align: right; font-weight: 600; }
 
 .portal-metrics { background: var(--paper); border-bottom: 1px solid var(--line); }
-.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+.metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
 .metrics-grid > div { position: relative; min-height: 150px; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; column-gap: 12px; padding: 30px 34px; border-right: 1px solid var(--line); }
-.metrics-grid > div:first-child { border-left: 1px solid var(--line); }
+.metrics-grid > div:nth-child(3n + 1) { border-left: 1px solid var(--line); }
+.metrics-grid > div:nth-child(n + 4) { border-top: 1px solid var(--line); }
 .metrics-grid svg { grid-row: 1 / 3; align-self: center; color: var(--teal); }
 .metrics-grid span { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .metrics-grid strong { font: 600 28px Georgia, serif; color: var(--ink); overflow-wrap: anywhere; }
@@ -98,6 +99,13 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .evidence-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 72px; align-items: center; }
 .evidence-layout .portal-kicker { color: #70d8cf; }
 .evidence-layout p { margin: 0; color: #c5d1cd; line-height: 1.7; }
+.evidence-catalog { display: grid; gap: 20px; }
+.evidence-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #41524e; }
+.evidence-summary > div { min-width: 0; display: grid; gap: 6px; align-content: start; padding: 18px; border-right: 1px solid #41524e; }
+.evidence-summary > div:last-child { border-right: 0; }
+.evidence-summary span { color: #9eb0ab; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.evidence-summary strong { color: white; font: 600 20px Georgia, serif; overflow-wrap: anywhere; }
+.evidence-summary small { color: #9eb0ab; font-size: 11px; line-height: 1.45; }
 .portal-text-link { display: inline-flex; align-items: center; gap: 6px; color: var(--teal-dark); font-size: 14px; font-weight: 750; white-space: nowrap; }
 .evidence-layout .portal-text-link { color: #f0ba70; }
 .portal-text-link:hover { text-decoration: underline; }
@@ -108,13 +116,13 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .page-intro > p:last-child, .methods-intro > p { max-width: 750px; margin: 16px 0 0; color: var(--ink-soft); font-size: 17px; line-height: 1.65; }
 
 .catalog-section { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.catalog-toolbar { display: grid; grid-template-columns: minmax(300px, 2fr) repeat(2, minmax(160px, 1fr)) 42px; gap: 12px; align-items: end; padding: 18px; border-bottom: 1px solid var(--line); }
+.catalog-toolbar { display: grid; grid-template-columns: minmax(300px, 2fr) repeat(3, minmax(150px, 1fr)) 42px; gap: 12px; align-items: end; padding: 18px; border-bottom: 1px solid var(--line); }
 .catalog-toolbar label { min-width: 0; display: grid; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 750; text-transform: uppercase; }
 .catalog-toolbar input, .catalog-toolbar select, .catalog-pagination select { width: 100%; height: 42px; border: 1px solid var(--line-strong); border-radius: 5px; background: white; color: var(--ink); padding: 0 11px; font-size: 13px; text-transform: none; }
 .catalog-search { position: relative; }
 .catalog-search svg { position: absolute; z-index: 1; left: 11px; bottom: 10px; width: 21px; height: 21px; color: var(--muted); }
 .catalog-search input { padding-left: 40px; }
-.catalog-reset { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 5px; background: white; color: var(--ink-soft); }
+.catalog-reset { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; justify-self: end; border: 1px solid var(--line-strong); border-radius: 5px; background: white; color: var(--ink-soft); }
 .catalog-reset:hover { color: var(--teal-dark); border-color: var(--teal); }
 .catalog-taxonomy-panel { padding: 14px 18px 18px; border-bottom: 1px solid var(--line); background: #fbfcfb; }
 .catalog-taxonomy-heading { margin-bottom: 9px; color: var(--teal-dark); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -130,7 +138,7 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .catalog-error { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 18px; border-bottom: 1px solid #edc7c2; background: #fff4f2; color: #8b2e22; font-size: 12px; }
 .catalog-error button { min-height: 30px; border: 1px solid #d49a92; border-radius: 5px; background: white; color: #8b2e22; padding: 0 12px; font-weight: 750; }
 .catalog-table-wrap { overflow-x: auto; }
-.catalog-table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 13px; }
+.catalog-table { width: 100%; min-width: 1160px; border-collapse: collapse; font-size: 13px; }
 .catalog-table th { padding: 12px 16px; background: #f7f9f8; border-bottom: 1px solid var(--line); color: var(--muted); text-align: left; font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .catalog-table th.catalog-sortable-heading { padding: 0; }
 .catalog-sort-button { width: 100%; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 12px 16px; background: transparent; color: inherit; font: inherit; font-weight: inherit; text-align: left; text-transform: inherit; cursor: pointer; }
@@ -146,6 +154,7 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
 .catalog-accession:hover { text-decoration: underline; }
 .organism-name { font-style: italic; font-weight: 650; }
 .numeric-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.catalog-evidence-cell { min-width: 190px; }
 .evidence-available, .evidence-muted { display: inline-flex; align-items: center; min-height: 24px; border-radius: 4px; padding: 4px 7px; font-size: 11px; font-weight: 700; }
 .evidence-available { background: var(--blue-soft); color: var(--blue); }
 .evidence-muted { background: #edf0ef; color: var(--muted); }
@@ -291,8 +300,8 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
   .portal-hero-layout { grid-template-columns: 1fr; gap: 48px; }
   .sequence-figure { max-width: 740px; width: 100%; }
   .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-  .metrics-grid > div:nth-child(3) { border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
-  .metrics-grid > div:nth-child(4) { border-top: 1px solid var(--line); }
+  .metrics-grid > div:nth-child(odd) { border-left: 1px solid var(--line); }
+  .metrics-grid > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
   .catalog-toolbar { grid-template-columns: repeat(3, 1fr); }
   .catalog-search { grid-column: span 2; }
   .catalog-taxonomy-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -320,6 +329,9 @@ code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospac
   .metrics-grid strong { font-size: 22px; }
   .portal-section { padding-block: 62px; }
   .split-section, .evidence-layout { grid-template-columns: 1fr; gap: 34px; }
+  .evidence-summary { grid-template-columns: 1fr; }
+  .evidence-summary > div { border-right: 0; border-bottom: 1px solid #41524e; }
+  .evidence-summary > div:last-child { border-bottom: 0; }
   .phyla-row { grid-template-columns: minmax(92px, 130px) 1fr 52px; gap: 10px; }
   .page-intro { padding-block: 44px 28px; }
   .page-intro h1, .detail-heading h1, .genome-browser-header h1, .portal-state-page h1 { font-size: 38px; }
