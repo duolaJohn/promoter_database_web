@@ -12,12 +12,17 @@ class JobSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Literal["predict", "genome_scan"]
     complete_genome: Literal[True] = Field(
-        description="Confirms that genome_context or fasta contains the complete genome used to calculate CGR."
+        description="Confirms that the selected reference, genome_context, or fasta is a complete genome."
     )
     sequence: str | None = Field(default=None, description="Target sequence to score in predict mode.")
     genome_context: str | None = Field(
         default=None,
         description="Complete genome sequence used to calculate the model's 128 x 128 CGR context.",
+    )
+    reference_accession: str | None = Field(
+        default=None,
+        pattern=r"^GCF_[0-9]{9}\.[0-9]+$",
+        description="Accession of a server-side precomputed genome CGR.",
     )
     fasta: str | None = Field(
         default=None,
@@ -36,19 +41,16 @@ class JobSubmission(BaseModel):
         if self.mode == "predict":
             if self.sequence is None:
                 raise ValueError("predict mode requires sequence")
-            if self.genome_context is None:
-                raise ValueError(
-                    "predict mode requires the complete genome in genome_context to calculate CGR"
-                )
-            if self.fasta is not None:
-                raise ValueError("predict mode does not accept fasta")
+            sources = (self.genome_context, self.reference_accession, self.fasta)
+            if sum(value is not None for value in sources) != 1:
+                raise ValueError("predict mode requires exactly one of genome_context, reference_accession, or fasta")
             if self.output_formats:
                 raise ValueError("output_formats is only supported for genome_scan mode")
         else:
             if self.fasta is None:
                 raise ValueError("genome_scan mode requires a complete single-genome assembly FASTA to calculate CGR")
-            if self.sequence is not None or self.genome_context is not None:
-                raise ValueError("genome_scan mode accepts fasta, not sequence/genome_context")
+            if self.sequence is not None or self.genome_context is not None or self.reference_accession is not None:
+                raise ValueError("genome_scan mode accepts fasta, not sequence/genome_context/reference_accession")
             if self.output_formats is not None:
                 if not self.output_formats:
                     raise ValueError("output_formats must contain at least one format")

@@ -17,6 +17,8 @@ class ServiceSettings:
     redis_url: str
     queue_name: str
     data_root: Path
+    cgr_cache_root: Path
+    cgr_version: str
     model_dir: Path
     model_version: str
     device: str
@@ -75,6 +77,8 @@ class ServiceSettings:
             raise ValueError("ticket_validation_mode must be 'cloudflare' or 'disabled'")
         if not self.model_version.strip():
             raise ValueError("model_version must not be empty")
+        if not self.cgr_version.strip():
+            raise ValueError("cgr_version must not be empty")
         if self.file_retention_seconds < 0:
             raise ValueError("file_retention_seconds must be zero or positive")
         if bool(self.job_callback_url) != bool(self.job_callback_secret):
@@ -83,11 +87,14 @@ class ServiceSettings:
     @classmethod
     def from_env(cls) -> "ServiceSettings":
         data_root = Path(os.getenv("RAPPTOR_DATA_ROOT", "/data")).resolve()
+        cgr_cache_root = Path(os.getenv("RAPPTOR_CGR_CACHE_ROOT", "/data/cgr-cache")).resolve()
         model_dir = Path(os.getenv("RAPPTOR_MODEL_DIR", "/models")).resolve()
         return cls(
             redis_url=os.getenv("RAPPTOR_REDIS_URL", "redis://redis:6379/0"),
             queue_name=os.getenv("RAPPTOR_QUEUE", "prediction"),
             data_root=data_root,
+            cgr_cache_root=cgr_cache_root,
+            cgr_version=os.getenv("RAPPTOR_CGR_VERSION", "cgr-128-v1"),
             model_dir=model_dir,
             model_version=os.getenv("RAPPTOR_MODEL_VERSION", "candidate"),
             device=os.getenv("RAPPTOR_DEVICE", "cuda:0"),

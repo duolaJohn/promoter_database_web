@@ -2,8 +2,10 @@ version: "2.3"
 
 services:
   redis:
-    image: redis:7.2-alpine
-    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    image: rapptor-prediction-cpu:latest
+    command: ["redis-server", "--protected-mode", "no", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "", "--dir", "/data/redis"]
+    volumes:
+      - rapptor-prediction-redis:/data/redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -13,10 +15,10 @@ services:
     networks: [rapptor-prediction]
 
   api:
-    image: rapptor-prediction:dev
+    image: rapptor-prediction-cpu:latest
     build:
       context: ../..
-      dockerfile: services/prediction/Dockerfile
+      dockerfile: services/prediction/Dockerfile.cpu
     command: ["python", "-m", "prediction_service"]
     environment: &service_env
       RAPPTOR_REDIS_URL: redis://redis:6379/0
@@ -25,8 +27,8 @@ services:
       RAPPTOR_DATA_ROOT: /data
       RAPPTOR_CGR_CACHE_ROOT: ${RAPPTOR_CGR_CACHE_ROOT:-/data/cgr-cache}
       RAPPTOR_CGR_VERSION: ${RAPPTOR_CGR_VERSION:-cgr-128-v1}
-      RAPPTOR_MODEL_VERSION: ${RAPPTOR_MODEL_VERSION:-candidate-github-93cf}
-      RAPPTOR_DEVICE: cuda:0
+      RAPPTOR_MODEL_VERSION: candidate-github-93cf
+      RAPPTOR_DEVICE: cpu
       RAPPTOR_TICKET_VALIDATION_MODE: ${RAPPTOR_TICKET_VALIDATION_MODE:-disabled}
       RAPPTOR_TICKET_CONSUME_URL: ${RAPPTOR_TICKET_CONSUME_URL:-}
       RAPPTOR_TICKET_SERVICE_SECRET: ${RAPPTOR_TICKET_SERVICE_SECRET:-}
@@ -37,10 +39,9 @@ services:
       RAPPTOR_DEFAULT_SCAN_STRIDE: ${RAPPTOR_DEFAULT_SCAN_STRIDE:-1}
       RAPPTOR_MAX_GENOME_BASES: ${RAPPTOR_MAX_GENOME_BASES:-6000000}
       RAPPTOR_MAX_QUEUE_LENGTH: ${RAPPTOR_MAX_QUEUE_LENGTH:-100}
-      RAPPTOR_DEFAULT_BATCH_SIZE: ${RAPPTOR_DEFAULT_BATCH_SIZE:-1024}
+      RAPPTOR_DEFAULT_BATCH_SIZE: ${RAPPTOR_DEFAULT_BATCH_SIZE:-32}
     volumes:
-      - ${RAPPTOR_MODEL_HOST_DIR:-./model-assets/candidate-github-93cf}:/models:ro
-      - rapptor-data:/data
+      - rapptor-prediction-data:/data
     ports:
       - "127.0.0.1:${RAPPTOR_API_PORT:-8000}:8000"
     depends_on:
@@ -55,16 +56,15 @@ services:
     networks: [rapptor-prediction]
 
   worker:
-    image: rapptor-prediction:dev
+    image: rapptor-prediction-cpu:latest
     command: ["python", "-m", "prediction_service.worker"]
     environment:
       <<: *service_env
-      NVIDIA_VISIBLE_DEVICES: ${RAPPTOR_GPU_INDEX:-0}
-    runtime: nvidia
-    ipc: host
+      OMP_NUM_THREADS: ${RAPPTOR_CPU_THREADS:-28}
+      MKL_NUM_THREADS: ${RAPPTOR_CPU_THREADS:-28}
+      OPENBLAS_NUM_THREADS: ${RAPPTOR_CPU_THREADS:-28}
     volumes:
-      - ${RAPPTOR_MODEL_HOST_DIR:-./model-assets/candidate-github-93cf}:/models:ro
-      - rapptor-data:/data
+      - rapptor-prediction-data:/data
     depends_on:
       redis:
         condition: service_healthy
@@ -76,4 +76,5 @@ networks:
     driver: bridge
 
 volumes:
-  rapptor-data:
+  rapptor-prediction-data:
+  rapptor-prediction-redis:

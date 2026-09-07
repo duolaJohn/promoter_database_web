@@ -8,6 +8,7 @@ from pathlib import Path
 from rq import get_current_job
 
 from .callbacks import report_job_event
+from .cgr_cache import ensure_reference_cgr
 from .config import SETTINGS
 from .formats import ScanArtifactWriter
 from .runtime import get_runtime, sha256_file
@@ -99,16 +100,31 @@ def _predict(job_id: str, request: dict, storage: JobStorage) -> dict:
         max_bases=SETTINGS.max_predict_bases,
         max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
     )
-    genome_context = validate_sequence(
-        request["genome_context"],
-        label="genome_context",
-        min_bases=runtime.seq_length,
-        max_bases=SETTINGS.max_genome_bases,
-        max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
-    )
     _progress("preparing_cgr", 15.0)
-    context_fasta = storage.write_text(job_id, "genome_context.fasta", f">genome_context\n{genome_context}\n")
-    cgr = runtime.make_cgr(context_fasta, job_dir)
+    reference_accession = request.get("reference_accession")
+    if reference_accession is not None:
+        context_bases = None
+        cgr = ensure_reference_cgr(reference_accession, request.get("reference_source")).to(runtime.device)
+    elif request.get("fasta") is not None:
+        validated = validate_fasta(
+            request["fasta"],
+            max_bases=SETTINGS.max_genome_bases,
+            max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
+        )
+        context_bases = validated.total_bases
+        context_fasta = storage.write_text(job_id, "genome_context.fasta", validated.to_fasta())
+        cgr = runtime.make_cgr(context_fasta, job_dir)
+    else:
+        genome_context = validate_sequence(
+            request["genome_context"],
+            label="genome_context",
+            min_bases=runtime.seq_length,
+            max_bases=SETTINGS.max_genome_bases,
+            max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
+        )
+        context_bases = len(genome_context)
+        context_fasta = storage.write_text(job_id, "genome_context.fasta", f">genome_context\n{genome_context}\n")
+        cgr = runtime.make_cgr(context_fasta, job_dir)
     _progress("inference", 45.0)
     batch_size = int(request.get("batch_size") or SETTINGS.default_batch_size)
     scores = runtime.score_sequence(sequence, cgr, stride=1, batch_size=batch_size)
@@ -137,8 +153,9 @@ def _predict(job_id: str, request: dict, storage: JobStorage) -> dict:
     payload = {
         "mode": "predict",
         "sequence_bases": len(sequence),
-        "genome_context_bases": len(genome_context),
-        "cgr_source": "complete_genome_sequence",
+        "genome_context_bases": context_bases,
+        "reference_accession": reference_accession,
+        "cgr_source": request["cgr_source"],
         "complete_genome": "submitter_asserted",
         "window_count": int(len(scores)),
         "max_score": float(scores.max()),

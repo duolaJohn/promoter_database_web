@@ -14,12 +14,13 @@ from rq.registry import FailedJobRegistry, FinishedJobRegistry, StartedJobRegist
 
 from .config import SETTINGS
 from .callbacks import deliver_job_event_async, persist_job_event
+from .cgr_cache import ReferenceCgrNotFound, load_reference_cgr, normalize_reference_source
 from .jobs import process_job
 from .queueing import get_queue, get_redis_connection
 from .schemas import JobCreated, JobStatus, JobSubmission
 from .security import new_access_token, token_digest, token_matches
 from .storage import JobStorage
-from .tickets import TicketRejected, consume_ticket, parse_ticket_header
+from .tickets import ReferenceSourceUnavailable, TicketRejected, consume_ticket, parse_ticket_header
 from .validation import InputValidationError, validate_fasta, validate_sequence
 
 
@@ -123,6 +124,21 @@ def _validate_submission(payload: JobSubmission) -> tuple[dict, int]:
             max_bases=SETTINGS.max_predict_bases,
             max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
         )
+        request["sequence"] = sequence
+        request["stride"] = 1
+        if payload.reference_accession is not None:
+            request["cgr_source"] = "reference_accession"
+            return request, len(sequence)
+        request.pop("reference_accession", None)
+        if payload.fasta is not None:
+            validated = validate_fasta(
+                payload.fasta,
+                max_bases=SETTINGS.max_genome_bases,
+                max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
+            )
+            request["fasta"] = validated.to_fasta()
+            request["cgr_source"] = "uploaded_complete_genome_fasta"
+            return request, len(sequence) + validated.total_bases
         genome_context = validate_sequence(
             payload.genome_context or "",
             label="genome_context",
@@ -130,12 +146,11 @@ def _validate_submission(payload: JobSubmission) -> tuple[dict, int]:
             max_bases=SETTINGS.max_genome_bases,
             max_ambiguous_fraction=SETTINGS.max_ambiguous_fraction,
         )
-        request["sequence"] = sequence
         request["genome_context"] = genome_context
         request["cgr_source"] = "complete_genome_sequence"
-        request["stride"] = 1
         return request, len(sequence) + len(genome_context)
 
+    request.pop("reference_accession", None)
     validated = validate_fasta(
         payload.fasta or "",
         max_bases=SETTINGS.max_genome_bases,
@@ -180,7 +195,7 @@ def current_model():
             "default_output_formats": ["bigwig", "parquet"],
         },
         "complete_genome_field": {
-            "predict": "genome_context",
+            "predict": ["genome_context", "reference_accession", "fasta"],
             "genome_scan": "fasta",
         },
         "completeness_validation": "submitter_assertion",
@@ -204,6 +219,8 @@ def readyz():
 async def submit_job(payload: JobSubmission, authorization: str | None = Header(default=None)):
     try:
         request_payload, billed_bases = _validate_submission(payload)
+    except ReferenceCgrNotFound:
+        _http_error(404, "REFERENCE_CGR_NOT_FOUND", "Reference CGR is unavailable.")
     except InputValidationError as exc:
         _http_error(400, "INVALID_INPUT", str(exc))
 
@@ -212,11 +229,30 @@ async def submit_job(payload: JobSubmission, authorization: str | None = Header(
 
     ticket = parse_ticket_header(authorization)
     try:
-        await consume_ticket(ticket, model_version=SETTINGS.model_version, bases=billed_bases)
+        reference_source = await consume_ticket(
+            ticket,
+            model_version=SETTINGS.model_version,
+            bases=billed_bases,
+            reference_accession=payload.reference_accession,
+        )
+    except ReferenceSourceUnavailable:
+        _http_error(404, "REFERENCE_CGR_NOT_FOUND", "Reference CGR is unavailable.")
     except TicketRejected as exc:
         _http_error(401, "INVALID_TICKET", str(exc))
     except RuntimeError as exc:
         _http_error(503, "TICKET_SERVICE_UNAVAILABLE", str(exc))
+
+    if payload.reference_accession is not None:
+        try:
+            load_reference_cgr(payload.reference_accession)
+        except ReferenceCgrNotFound:
+            try:
+                request_payload["reference_source"] = normalize_reference_source(
+                    payload.reference_accession,
+                    reference_source,
+                )
+            except ReferenceCgrNotFound:
+                _http_error(404, "REFERENCE_CGR_NOT_FOUND", "Reference CGR is unavailable.")
 
     connection = get_redis_connection()
     try:

@@ -51,6 +51,79 @@ def test_cloudflare_ticket_validation_requires_credentials(monkeypatch):
         asyncio.run(tickets.consume_ticket("ticket", model_version="candidate", bases=100))
 
 
+def test_ticket_consume_returns_worker_resolved_reference_source(monkeypatch):
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "allowed": True,
+                "referenceSource": {"url": "https://example.test/reference.fna", "sha256": "a" * 64},
+            }
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json, headers):
+            captured.update({"url": url, "json": json, "headers": headers})
+            return Response()
+
+    monkeypatch.setattr(tickets.httpx, "AsyncClient", lambda timeout: Client())
+    monkeypatch.setattr(tickets, "SETTINGS", replace(
+        SETTINGS,
+        ticket_validation_mode="cloudflare",
+        ticket_consume_url="https://worker.example/consume",
+        ticket_service_secret="secret",
+    ))
+    source = asyncio.run(tickets.consume_ticket(
+        "ticket",
+        model_version="candidate",
+        bases=100,
+        reference_accession="GCF_000005845.1",
+    ))
+    assert source == {"url": "https://example.test/reference.fna", "sha256": "a" * 64}
+    assert captured["json"]["referenceAccession"] == "GCF_000005845.1"
+
+
+def test_ticket_consume_preserves_reference_not_found(monkeypatch):
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {"allowed": False, "errorCode": "REFERENCE_CGR_NOT_FOUND"}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(tickets.httpx, "AsyncClient", lambda timeout: Client())
+    monkeypatch.setattr(tickets, "SETTINGS", replace(
+        SETTINGS,
+        ticket_validation_mode="cloudflare",
+        ticket_consume_url="https://worker.example/consume",
+        ticket_service_secret="secret",
+    ))
+    with pytest.raises(tickets.ReferenceSourceUnavailable):
+        asyncio.run(tickets.consume_ticket(
+            "ticket",
+            model_version="candidate",
+            bases=100,
+            reference_accession="GCF_999999999.1",
+        ))
+
+
 def test_cleanup_only_removes_expired_terminal_job(tmp_path):
     storage = JobStorage(tmp_path)
     expired_id = "a" * 32

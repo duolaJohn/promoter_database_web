@@ -1,26 +1,33 @@
 import asyncio
+import hashlib
 import importlib
+import json
 from starlette.requests import Request
 
 import fakeredis
 import pytest
 from fastapi import HTTPException
+from PIL import Image
 from pydantic import ValidationError
 from rq import Queue
 
 
 def load_api(tmp_path, monkeypatch):
     monkeypatch.setenv("RAPPTOR_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("RAPPTOR_CGR_CACHE_ROOT", str(tmp_path / "cgr-cache"))
+    monkeypatch.setenv("RAPPTOR_CGR_VERSION", "cgr-128-v1")
     monkeypatch.setenv("RAPPTOR_MODEL_DIR", str(tmp_path / "models"))
     monkeypatch.setenv("RAPPTOR_TICKET_VALIDATION_MODE", "disabled")
     monkeypatch.setenv("RAPPTOR_REQUIRE_WORKER_FOR_READY", "false")
     monkeypatch.setenv("RAPPTOR_MIN_SCAN_STRIDE", "1")
     monkeypatch.setenv("RAPPTOR_FILE_RETENTION_SECONDS", "86400")
     import prediction_service.config as config
+    import prediction_service.cgr_cache as cgr_cache
     import prediction_service.queueing as queueing
     import prediction_service.tickets as tickets
     import prediction_service.api as api
     importlib.reload(config)
+    importlib.reload(cgr_cache)
     importlib.reload(queueing)
     importlib.reload(tickets)
     importlib.reload(api)
@@ -37,10 +44,104 @@ def test_healthz(tmp_path, monkeypatch):
     assert api.current_model()["requires_complete_genome"] is True
 
 
-def test_predict_requires_genome_context(tmp_path, monkeypatch):
+def write_cgr_cache(tmp_path, accession="GCF_000005845.1"):
+    directory = tmp_path / "cgr-cache" / accession / "cgr-128-v1"
+    directory.mkdir(parents=True)
+    png_path = directory / "cgr.png"
+    Image.new("L", (128, 128), color=127).save(png_path)
+    png_sha256 = hashlib.sha256(png_path.read_bytes()).hexdigest()
+    (directory / "manifest.json").write_text(json.dumps({
+        "accession": accession,
+        "fastaSha256": "a" * 64,
+        "cgrPngSha256": png_sha256,
+        "resolution": 128,
+        "cgrVersion": "cgr-128-v1",
+        "generatedAt": "2026-09-07T00:00:00Z",
+    }))
+
+
+def test_predict_requires_exactly_one_cgr_source(tmp_path, monkeypatch):
     api, connection = load_api(tmp_path, monkeypatch)
-    with pytest.raises(ValidationError, match="complete genome"):
+    with pytest.raises(ValidationError, match="exactly one"):
         api.JobSubmission(mode="predict", complete_genome=True, sequence="A" * 100)
+    with pytest.raises(ValidationError, match="exactly one"):
+        api.JobSubmission(
+            mode="predict",
+            complete_genome=True,
+            sequence="A" * 100,
+            genome_context="A" * 100,
+            reference_accession="GCF_000005845.1",
+        )
+
+
+def test_predict_rejects_accession_path_traversal(tmp_path, monkeypatch):
+    api, connection = load_api(tmp_path, monkeypatch)
+    with pytest.raises(ValidationError, match="reference_accession"):
+        api.JobSubmission(
+            mode="predict",
+            complete_genome=True,
+            sequence="A" * 100,
+            reference_accession="../../GCF_000005845.1",
+        )
+    with pytest.raises(ValidationError, match="reference_source"):
+        api.JobSubmission(
+            mode="predict",
+            complete_genome=True,
+            sequence="A" * 100,
+            reference_accession="GCF_000005845.1",
+            reference_source={"url": "https://example.test/reference.fna", "sha256": "a" * 64},
+        )
+
+
+def test_predict_unknown_accession_is_safe_error(tmp_path, monkeypatch):
+    api, connection = load_api(tmp_path, monkeypatch)
+    with pytest.raises(HTTPException) as missing:
+        asyncio.run(api.submit_job(api.JobSubmission(
+            mode="predict",
+            complete_genome=True,
+            sequence="A" * 100,
+            reference_accession="GCF_999999999.1",
+        ), authorization=None))
+    assert missing.value.status_code == 404
+    assert missing.value.detail == {
+        "code": "REFERENCE_CGR_NOT_FOUND",
+        "message": "Reference CGR is unavailable.",
+    }
+
+
+def test_predict_accepts_reference_and_original_context(tmp_path, monkeypatch):
+    write_cgr_cache(tmp_path)
+    api, connection = load_api(tmp_path, monkeypatch)
+    reference_request, reference_bases = api._validate_submission(api.JobSubmission(
+        mode="predict",
+        complete_genome=True,
+        sequence="A" * 100,
+        reference_accession="GCF_000005845.1",
+    ))
+    context_request, context_bases = api._validate_submission(api.JobSubmission(
+        mode="predict",
+        complete_genome=True,
+        sequence="A" * 100,
+        genome_context="ACGT" * 100,
+    ))
+    assert reference_request["cgr_source"] == "reference_accession"
+    assert reference_bases == 100
+    assert context_request["cgr_source"] == "complete_genome_sequence"
+    assert "reference_accession" not in context_request
+    assert context_bases == 500
+
+
+def test_predict_accepts_uploaded_fasta(tmp_path, monkeypatch):
+    api, connection = load_api(tmp_path, monkeypatch)
+    request, bases = api._validate_submission(api.JobSubmission(
+        mode="predict",
+        complete_genome=True,
+        sequence="A" * 100,
+        fasta=">contig-1\n" + "ACGT" * 100,
+    ))
+    assert request["cgr_source"] == "uploaded_complete_genome_fasta"
+    assert request["fasta"].startswith(">contig-1\n")
+    assert bases == 500
 
 
 def test_genome_scan_accepts_stride_one(tmp_path, monkeypatch):
@@ -54,6 +155,7 @@ def test_genome_scan_accepts_stride_one(tmp_path, monkeypatch):
     request, _ = api._validate_submission(payload)
     assert request["stride"] == 1
     assert request["output_formats"] == ["bigwig", "parquet"]
+    assert "reference_accession" not in request
 
 
 def test_submit_and_token_protected_status(tmp_path, monkeypatch):

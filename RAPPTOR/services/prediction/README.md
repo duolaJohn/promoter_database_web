@@ -17,14 +17,23 @@ read-only deployment directory when necessary.
 ## Required biological input
 
 The current model is CGR-conditioned (`use_cgr_image: true`). Every prediction
-must therefore include the **complete genome sequence**, not only a promoter
-window or a short neighborhood. The worker computes one 128 × 128 CGR image
-from that complete genome and uses it as the genome context for inference.
+must therefore identify or include the **complete genome**, not only a promoter
+window or a short neighborhood. The worker uses its 128 × 128 CGR as the model
+context.
 
 - `genome_scan`: upload the complete assembly FASTA; all contigs belong to the
   same genome and jointly form its CGR.
-- `predict`: send the target sequence as `sequence` and the complete genome as
-  `genome_context`.
+- `predict`: send `sequence` plus exactly one CGR source: a catalog-backed
+  `reference_accession`, the complete sequence in `genome_context`, or an
+  uploaded complete assembly in `fasta`.
+
+For a catalog accession, Docker first validates
+`/data/cgr-cache/<accession>/<cgr-version>/cgr.png`. On a miss, ticket
+consumption returns a Worker-resolved HTTPS FASTA URL and SHA-256. Docker
+downloads that trusted URL, verifies the bytes, generates the cache through
+`generate_cgr_from_fasta(..., resolution=128, raw_counts=False)`, and atomically
+publishes the PNG and manifest. The public job schema does not accept a URL,
+local path, CGR, or checksum from the browser.
 
 Completeness cannot be inferred reliably from sequence text alone. The API
 validates format, alphabet, ambiguity, byte size, and configured base limits,
@@ -75,3 +84,16 @@ PYTHONPATH=services/prediction/src python -m pytest services/prediction/tests
 
 Production must enable Cloudflare ticket validation and use the same service
 secret as the web application's internal ticket-consumption route.
+
+The internal consume request includes optional `referenceAccession`. For an
+allowed catalog reference, the Worker resolves D1 metadata and returns:
+
+```json
+{
+  "allowed": true,
+  "referenceSource": {
+    "url": "https://huggingface.co/.../reference.fna",
+    "sha256": "64 lowercase hexadecimal characters"
+  }
+}
+```
