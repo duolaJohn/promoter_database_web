@@ -16,6 +16,10 @@ FORMAT_MIME = {
     "json": "application/json; charset=utf-8",
 }
 
+SMOOTHING_SIGMA = 1.0
+PEAK_DISTANCE = 10
+PEAK_CUTOFF = 0.9
+
 
 class ArtifactFormatError(RuntimeError):
     pass
@@ -54,6 +58,9 @@ class ScanArtifactWriter:
         self.stride = int(stride)
         self.score_cutoff = float(score_cutoff) if score_cutoff is not None else None
         self._counter = 0
+        self._gff_counter = 0
+        self._json_counter = 0
+        self._peak_counter = 0
         self._closed = False
         self._handles: dict[str, object] = {}
         self._tmp_paths: dict[str, Path] = {}
@@ -63,6 +70,8 @@ class ScanArtifactWriter:
         self._bigwigs: dict[str, object] = {}
 
         try:
+            if "gff3" in self.formats and self.stride != 1:
+                raise ArtifactFormatError("smoothed GFF3 and peak output requires stride=1")
             for fmt in self.formats:
                 if fmt == "bigwig":
                     self._open_bigwig("+", model_version, checkpoint_sha256)
@@ -70,16 +79,26 @@ class ScanArtifactWriter:
                 elif fmt == "parquet":
                     self._open_parquet(model_version, checkpoint_sha256)
                 elif fmt == "gff3":
-                    self._open_text("scores.gff3")
+                    self._open_text("scores.gff3", "gff3")
                     handle = self._handles["gff3"]
                     handle.write("##gff-version 3\n")
                     handle.write(f"##RAPPtor-model-version {model_version}\n")
                     handle.write(f"##RAPPtor-checkpoint-sha256 {checkpoint_sha256}\n")
                     handle.write(f"##RAPPtor-scan-stride {self.stride}\n")
+                    handle.write(f"##RAPPtor-score-smoothing gaussian sigma={SMOOTHING_SIGMA:g} mode=reflect\n")
                     cutoff = "none" if self.score_cutoff is None else f">{self.score_cutoff:g}"
                     handle.write(f"##RAPPtor-score-cutoff {cutoff}\n")
+                    self._open_text("peaks.gff3", "peaks")
+                    peak_handle = self._handles["peaks"]
+                    peak_handle.write("##gff-version 3\n")
+                    peak_handle.write(f"##RAPPtor-model-version {model_version}\n")
+                    peak_handle.write(f"##RAPPtor-checkpoint-sha256 {checkpoint_sha256}\n")
+                    peak_handle.write(f"##RAPPtor-scan-stride {self.stride}\n")
+                    peak_handle.write(f"##RAPPtor-score-smoothing gaussian sigma={SMOOTHING_SIGMA:g} mode=reflect\n")
+                    peak_handle.write(f"##RAPPtor-peak-distance {PEAK_DISTANCE}\n")
+                    peak_handle.write(f"##RAPPtor-peak-cutoff >{PEAK_CUTOFF:g}\n")
                 elif fmt == "json":
-                    self._open_text("scores.json")
+                    self._open_text("scores.json", "json")
                     self._handles["json"].write("[\n")
         except Exception:
             self.close(success=False)
@@ -92,10 +111,9 @@ class ScanArtifactWriter:
         self._final_paths[name] = final
         return temporary, final
 
-    def _open_text(self, name: str) -> Path:
+    def _open_text(self, name: str, key: str) -> Path:
         temporary, _ = self._temp_path(name)
         handle = temporary.open("w", encoding="utf-8", newline="")
-        key = "gff3" if name.endswith(".gff3") else "json"
         self._handles[key] = handle
         return temporary
 
@@ -184,8 +202,27 @@ class ScanArtifactWriter:
             raise ValueError("strand must be '+' or '-'")
         if window_length <= 0 or window_length > sequence_length:
             raise ValueError("window_length must be within the input sequence")
-        for _indices, window_starts, anchor_positions, values in self._chunks(
-            scores, sequence_length, strand, self.stride, upstream_len, window_length
+        raw_scores = np.asarray(scores, dtype=np.float32)
+        smoothed_scores = None
+        peak_indices: set[int] = set()
+        if "gff3" in self.formats:
+            from scipy.ndimage import gaussian_filter1d
+            from scipy.signal import find_peaks
+
+            ordered_scores = raw_scores if strand == "+" else raw_scores[::-1]
+            ordered_smoothed = gaussian_filter1d(
+                ordered_scores.astype(float), SMOOTHING_SIGMA, mode="reflect"
+            )
+            indices, _ = find_peaks(ordered_smoothed, distance=PEAK_DISTANCE)
+            ordered_peaks = {int(index) for index in indices if ordered_smoothed[index] > PEAK_CUTOFF}
+            if strand == "+":
+                smoothed_scores = ordered_smoothed
+                peak_indices = ordered_peaks
+            else:
+                smoothed_scores = ordered_smoothed[::-1]
+                peak_indices = {len(raw_scores) - index - 1 for index in ordered_peaks}
+        for score_indices, window_starts, anchor_positions, values in self._chunks(
+            raw_scores, sequence_length, strand, self.stride, upstream_len, window_length
         ):
             count = len(values)
             if not count:
@@ -216,17 +253,31 @@ class ScanArtifactWriter:
                 window_start = int(window_starts[index])
                 anchor = int(anchor_positions[index])
                 score = float(values[index])
-                if self.score_cutoff is not None and score <= self.score_cutoff:
-                    continue
-                self._counter += 1
                 if "gff3" in self.formats:
-                    self._handles["gff3"].write(
-                        f"{sequence_id}\tRAPPtor\tpromoter_candidate\t{anchor + 1}\t{anchor + 1}\t"
-                        f"{score:.8f}\t{strand}\t.\tID=rapptor_hit_{self._counter:012d};"
-                        f"window_start_0based={window_start};stride={self.stride}\n"
-                    )
-                if "json" in self.formats:
-                    if self._counter > 1:
+                    smoothed_score = float(smoothed_scores[score_indices[index]])
+                    if self.score_cutoff is None or smoothed_score > self.score_cutoff:
+                        self._gff_counter += 1
+                        self._handles["gff3"].write(
+                            f"{sequence_id}\tRAPPtor\tpromoter_candidate\t{anchor + 1}\t{anchor + 1}\t"
+                            f"{smoothed_score:.8f}\t{strand}\t.\tID=rapptor_hit_{self._gff_counter:012d};"
+                            f"window_start_0based={window_start};stride={self.stride}\n"
+                        )
+                    if int(score_indices[index]) in peak_indices:
+                        self._peak_counter += 1
+                        peak_id = f"promoter_peak_{self._peak_counter:09d}"
+                        self._handles["peaks"].write(
+                            f"{sequence_id}\tRAPPtor\tpromoter_peak\t{anchor + 1}\t{anchor + 1}\t"
+                            f"{smoothed_score:.8f}\t{strand}\t.\tID={peak_id};Name={peak_id};"
+                            f"prediction_score={smoothed_score:.8f}\n"
+                        )
+                passes_cutoff = self.score_cutoff is None or (
+                    float(smoothed_scores[score_indices[index]]) if smoothed_scores is not None else score
+                ) > self.score_cutoff
+                if passes_cutoff:
+                    self._counter += 1
+                if "json" in self.formats and (self.score_cutoff is None or score > self.score_cutoff):
+                    self._json_counter += 1
+                    if self._json_counter > 1:
                         self._handles["json"].write(",\n")
                     self._handles["json"].write(
                         json.dumps(
@@ -244,6 +295,10 @@ class ScanArtifactWriter:
     @property
     def passing_score_count(self) -> int:
         return self._counter
+
+    @property
+    def peak_count(self) -> int:
+        return self._peak_counter
 
     def close(self, *, success: bool) -> list[dict]:
         if self._closed:

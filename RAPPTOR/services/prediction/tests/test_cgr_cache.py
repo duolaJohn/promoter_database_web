@@ -198,6 +198,9 @@ def test_reference_accession_completes_predict_without_fasta(tmp_path, monkeypat
     }, storage)
     summary = storage.read_json(job_id, "summary.json")
     assert result["format"] == "json"
+    assert {item["filename"] for item in result["artifacts"]} >= {"scores.json", "scores.gff3", "peaks.gff3"}
+    assert summary["smoothing"] == {"method": "gaussian", "sigma": 1.0, "mode": "reflect"}
+    assert summary["peak_calling"] == {"distance": 10, "cutoff": 0.9, "operator": ">"}
     assert summary["reference_accession"] == ACCESSION
     assert summary["cgr_source"] == "reference_accession"
     assert not (storage.job_dir(job_id) / "genome_context.fasta").exists()

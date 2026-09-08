@@ -42,10 +42,13 @@ then records that the caller asserted complete-genome input.
 ## Sequence-scan outputs
 
 `genome_scan` accepts a configured-range `stride` and an optional
-`score_cutoff` in `[0, 1]`. The cutoff uses the strict rule
-`score > score_cutoff` and applies only to sparse GFF3/JSON records. BigWig and
-Parquet always retain every scanned window, so changing a display/export cutoff
-never destroys the underlying probability track. `top_k` remains unsupported.
+`score_cutoff` in `[0, 1]`. BigWig, Parquet, and JSON retain raw model scores.
+When GFF3 is requested, `scores.gff3` contains Gaussian-smoothed scores
+(`sigma=1.0`, `mode=reflect`) and `peaks.gff3` contains RAPPtor peak calls using
+`distance=10` and the strict rule `smoothed_score > 0.9`. GFF3 post-processing
+requires a contiguous stride-1 scan. The optional export cutoff filters sparse
+smoothed GFF3 and raw JSON records but never BigWig or Parquet. `top_k` remains
+unsupported.
 
 ```json
 {
@@ -114,3 +117,10 @@ allowed catalog reference, the Worker resolves D1 metadata and returns:
   }
 }
 ```
+
+## Service workload status
+
+`GET /v1/status` returns aggregate queued/running job counts and input-size
+statistics without exposing job IDs, sequences, tickets, or user data. A
+token-protected `GET /v1/jobs/{job_id}` response also includes that job's
+`mode` and `input_bases`.

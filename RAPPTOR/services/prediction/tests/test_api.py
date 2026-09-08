@@ -68,6 +68,37 @@ def test_mode_specific_queue_names(tmp_path, monkeypatch):
         queueing.get_queue(connection, "unknown")
 
 
+def test_service_status_reports_queue_counts_and_input_sizes(tmp_path, monkeypatch):
+    api, connection = load_api(tmp_path, monkeypatch)
+    asyncio.run(api.submit_job(api.JobSubmission(
+        mode="genome_scan",
+        complete_genome=True,
+        fasta=">contig\n" + "ACGT" * 100,
+    ), authorization=None))
+    asyncio.run(api.submit_job(api.JobSubmission(
+        mode="predict",
+        complete_genome=True,
+        sequence="A" * 100,
+        genome_context="ACGT" * 100,
+    ), authorization=None))
+
+    status = api.service_status()
+    assert status["status"] == "degraded"
+    assert status["worker_ready"] is False
+    assert status["queues"] == {"predict": 1, "genome_scan": 1}
+    assert status["workload"]["queued"]["predict"] == {
+        "jobs": 1,
+        "input_bases_known_jobs": 1,
+        "input_bases_total": 500,
+        "input_bases_min": 500,
+        "input_bases_max": 500,
+    }
+    assert status["workload"]["queued"]["genome_scan"]["input_bases_total"] == 400
+    assert status["workload"]["running"]["predict"]["jobs"] == 0
+    assert status["workload"]["running"]["genome_scan"]["jobs"] == 0
+    assert status["limits"]["max_predict_bases"] > 0
+
+
 def write_cgr_cache(tmp_path, accession="GCF_000005845.1"):
     directory = tmp_path / "cgr-cache" / accession / "cgr-128-v1"
     directory.mkdir(parents=True)
@@ -205,8 +236,26 @@ def test_genome_scan_accepts_stride_one(tmp_path, monkeypatch):
     capabilities = api.current_model()["genome_scan"]
     assert capabilities["score_cutoff"]["operator"] == ">"
     assert capabilities["score_cutoff"]["applies_to"] == ["gff3", "json"]
+    assert capabilities["gff3_postprocessing"] == {
+        "required_stride": 1,
+        "smoothing": {"method": "gaussian", "sigma": 1.0, "mode": "reflect"},
+        "peaks": {"distance": 10, "cutoff": 0.9, "operator": ">", "filename": "peaks.gff3"},
+    }
     assert capabilities["reverse_complementary"]["default"] is True
     assert "top_k" in capabilities["unsupported_filters"]
+
+
+def test_genome_scan_rejects_gff_peak_output_with_sparse_stride(tmp_path, monkeypatch):
+    api, connection = load_api(tmp_path, monkeypatch)
+    payload = api.JobSubmission(
+        mode="genome_scan",
+        complete_genome=True,
+        fasta=">contig\n" + "ACGT" * 100,
+        stride=5,
+        output_formats=["gff3"],
+    )
+    with pytest.raises(api.InputValidationError, match="requires stride=1"):
+        api._validate_submission(payload)
 
 
 def test_genome_scan_accepts_a_separate_complete_genome_for_cgr(tmp_path, monkeypatch):
@@ -263,6 +312,8 @@ def test_submit_and_token_protected_status(tmp_path, monkeypatch):
         "total_waiting": 1,
         "waiting_by_mode": {"predict": 0, "genome_scan": 1},
     }
+    assert status.mode == "genome_scan"
+    assert status.input_bases == 400
     assert status.artifacts_expires_at == created.artifacts_expires_at
     assert status.artifacts_expires_at is not None
 

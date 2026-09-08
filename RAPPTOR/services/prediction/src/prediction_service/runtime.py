@@ -96,7 +96,15 @@ class ModelRuntime:
         )
         return load_cgr_tensor(image_path).to(self.device)
 
-    def score_sequence(self, sequence: str, cgr_tensor: torch.Tensor | None, *, stride: int, batch_size: int) -> np.ndarray:
+    def score_sequence(
+        self,
+        sequence: str,
+        cgr_tensor: torch.Tensor | None,
+        *,
+        stride: int,
+        batch_size: int,
+        progress_callback=None,
+    ) -> np.ndarray:
         if self.use_cgr_image and cgr_tensor is None:
             raise ValueError("CGR-conditioned RAPPTOR requires a genome CGR tensor")
         args = SimpleNamespace(
@@ -105,7 +113,9 @@ class ModelRuntime:
             batch_size=int(batch_size),
             device=self.device,
         )
-        return run_inference_on_sequence(sequence, self.model, cgr_tensor, args)
+        return run_inference_on_sequence(
+            sequence, self.model, cgr_tensor, args, progress_callback=progress_callback
+        )
 
     def reverse_complement(self, sequence: str) -> str:
         return get_rc(sequence)

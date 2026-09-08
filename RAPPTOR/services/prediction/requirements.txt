@@ -5,3 +5,4 @@ rq==2.11.0
 httpx==0.28.1
 pyarrow==19.0.1
 pyBigWig==0.3.22
+scipy==1.15.3

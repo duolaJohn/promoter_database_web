@@ -123,6 +123,22 @@ def _queue_status(connection, job: Job, status: str) -> dict:
     }
 
 
+def _workload_snapshot(job_ids: list[str], connection) -> dict:
+    jobs = Job.fetch_many(job_ids, connection=connection)
+    input_bases = [
+        int(job.meta["input_bases"])
+        for job in jobs
+        if job is not None and isinstance(job.meta.get("input_bases"), int)
+    ]
+    return {
+        "jobs": len(job_ids),
+        "input_bases_known_jobs": len(input_bases),
+        "input_bases_total": sum(input_bases),
+        "input_bases_min": min(input_bases, default=0),
+        "input_bases_max": max(input_bases, default=0),
+    }
+
+
 def _parse_range(value: str | None, size: int):
     if not value:
         return None
@@ -223,7 +239,10 @@ def _validate_submission(payload: JobSubmission) -> tuple[dict, int]:
     request["cgr_source"] = "separate_complete_genome_sequence" if genome_context else "complete_genome_assembly_fasta"
     request["stride"] = stride
     request["score_cutoff"] = float(payload.score_cutoff) if payload.score_cutoff is not None else None
-    request["output_formats"] = list(payload.output_formats or ["bigwig", "parquet"])
+    output_formats = list(payload.output_formats or ["bigwig", "parquet"])
+    if "gff3" in output_formats and stride != 1:
+        raise InputValidationError("Smoothed GFF3 and peak output requires stride=1.")
+    request["output_formats"] = output_formats
     return request, validated.total_bases + (len(genome_context) if genome_context else 0)
 
 
@@ -259,6 +278,11 @@ def current_model():
             },
             "output_formats": ["bigwig", "parquet", "gff3", "json"],
             "default_output_formats": ["bigwig", "parquet"],
+            "gff3_postprocessing": {
+                "required_stride": 1,
+                "smoothing": {"method": "gaussian", "sigma": 1.0, "mode": "reflect"},
+                "peaks": {"distance": 10, "cutoff": 0.9, "operator": ">", "filename": "peaks.gff3"},
+            },
             "reverse_complementary": {"default": True},
             "batch_size": {
                 "default": SETTINGS.default_batch_size,
@@ -296,7 +320,17 @@ def service_status(history: str | None = None, bucket: str = "30m"):
         connection = get_redis_connection()
         connection.ping()
         latest = latest_cpu_sample(connection)
+        queues = _queues(connection)
+        workers = _workers_status(connection)
+        queued_ids = {mode: queue.get_job_ids() for mode, queue in queues.items()}
+        running_ids = {
+            mode: StartedJobRegistry(name=queue.name, connection=connection).get_job_ids()
+            for mode, queue in queues.items()
+        }
         response = {
+            "status": "ready" if all(workers.values()) else "degraded",
+            "model_version": SETTINGS.model_version,
+            "worker_ready": all(workers.values()),
             "sampled_at": (
                 datetime.fromtimestamp(float(latest["sampled_at"]), timezone.utc).isoformat()
                 if latest else None
@@ -305,8 +339,24 @@ def service_status(history: str | None = None, bucket: str = "30m"):
                 "window_seconds": 5,
                 "cpu_percent": float(latest["cpu_percent"]) if latest else None,
             },
-            "queues": _queue_counts(connection),
-            "workers": _workers_status(connection),
+            "queues": {mode: len(job_ids) for mode, job_ids in queued_ids.items()},
+            "workers": workers,
+            "workload": {
+                "queued": {
+                    mode: _workload_snapshot(job_ids, connection)
+                    for mode, job_ids in queued_ids.items()
+                },
+                "running": {
+                    mode: _workload_snapshot(job_ids, connection)
+                    for mode, job_ids in running_ids.items()
+                },
+            },
+            "limits": {
+                "max_queued_jobs": SETTINGS.max_queue_length,
+                "max_predict_bases": SETTINGS.max_predict_bases,
+                "max_genome_bases": SETTINGS.max_genome_bases,
+                "max_request_bytes": SETTINGS.max_request_bytes,
+            },
         }
         if history == "6h":
             response["history"] = {
@@ -417,6 +467,7 @@ async def submit_job(payload: JobSubmission, authorization: str | None = Header(
                 "access_token_sha256": token_digest(access_token),
                 "model_version": SETTINGS.model_version,
                 "mode": payload.mode,
+                "input_bases": billed_bases,
                 "submitted_at": submitted_at,
                 "artifacts_expires_at": expires_at,
                 "progress": {"stage": "queued", "percent": 0.0},
@@ -450,9 +501,17 @@ def get_job(job_id: str, x_job_token: str | None = Header(default=None, alias="X
     status = _status_name(job)
     result = job.meta.get("result") if status == "succeeded" else None
     error = job.meta.get("error") if status == "failed" else None
+    input_bases = job.meta.get("input_bases")
+    if not isinstance(input_bases, int):
+        try:
+            input_bases = int(JobStorage(SETTINGS.data_root).read_json(job_id, "submission.json")["billed_bases"])
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+            input_bases = None
     return JobStatus(
         job_id=job_id,
         status=status,
+        mode=job.meta.get("mode"),
+        input_bases=input_bases,
         model_version=job.meta.get("model_version"),
         progress=job.meta.get("progress"),
         submitted_at=job.meta.get("submitted_at"),

@@ -72,7 +72,7 @@ def seq_to_tensor(seq: str) -> torch.Tensor:
     return torch.from_numpy(_SEQ_LUT[arr])
 
 
-def run_inference_on_sequence(seq_str: str, model, organism_emb, args):
+def run_inference_on_sequence(seq_str: str, model, organism_emb, args, *, progress_callback=None):
     """
     Run sliding window inference on a single sequence.
 
@@ -81,6 +81,7 @@ def run_inference_on_sequence(seq_str: str, model, organism_emb, args):
         model: Loaded PyTorch model (already on device)
         organism_emb: CGR embedding tensor (already on device) or None
         args: Args object with batch_size, stride, length, device
+        progress_callback: Optional callback(completed_windows, total_windows), after each batch
 
     Returns:
         numpy array of scores (one per window position)
@@ -111,6 +112,9 @@ def run_inference_on_sequence(seq_str: str, model, organism_emb, args):
             logits = model(batch_X, genome_emb=E)
             probs = torch.softmax(logits, dim=1)
             all_scores.append(probs[:, 1].float().cpu())
+
+        if progress_callback is not None:
+            progress_callback(min(i + args.batch_size, num_windows), num_windows)
 
     if not all_scores:
         return np.array([])

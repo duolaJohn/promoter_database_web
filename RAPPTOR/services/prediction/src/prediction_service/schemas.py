@@ -31,14 +31,17 @@ class JobSubmission(BaseModel):
     stride: int | None = Field(
         default=None,
         ge=1,
-        description="Bases between adjacent genome-scan windows; deployment limits are published by /v1/models/current.",
+        description=(
+            "Bases between adjacent genome-scan windows; deployment limits are published by /v1/models/current. "
+            "Smoothed GFF3 and peak output requires stride=1."
+        ),
     )
     score_cutoff: float | None = Field(
         default=None,
         ge=0,
         le=1,
         description=(
-            "Optional strict score cutoff for sparse GFF3/JSON records. "
+            "Optional strict score cutoff for smoothed GFF3 and raw JSON records. "
             "BigWig and Parquet always retain every scanned window."
         ),
     )
@@ -97,6 +100,8 @@ class JobStatus(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     job_id: str
     status: Literal["queued", "running", "succeeded", "failed", "unknown"]
+    mode: Literal["predict", "genome_scan"] | None = None
+    input_bases: int | None = None
     model_version: str | None = None
     progress: dict | None = None
     submitted_at: str | None = None
