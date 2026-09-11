@@ -44,10 +44,9 @@ async def consume_ticket(
         "ticket": ticket,
         "modelVersion": model_version,
         "bases": bases,
+        "mode": mode,
         "referenceAccession": reference_accession,
     }
-    if mode is not None:
-        payload["mode"] = mode
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(SETTINGS.ticket_consume_url, json=payload, headers=headers)
